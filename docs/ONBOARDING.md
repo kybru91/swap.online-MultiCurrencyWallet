@@ -35,7 +35,7 @@
 - Look into the current graph (https://github.com/swaponline/MultiCurrencyWallet/network)
 
 ### 5. Deep insight
-- Raise a bot locally and exchange with it using [`/docs/BOT.md`](/docs/BOT.md)
+- Raise a bot locally and exchange with it using [`/docs/MARKETMAKER.md`](/docs/MARKETMAKER.md)
 - Understand the swap algorithm (see [`/docs/CORE.md`](/docs/CORE.md))
 - Understand the core
 - Understand the bot

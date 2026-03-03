@@ -75,6 +75,20 @@ Work in progress to add more languages.
 
 Developer? Start with [ONBOARDING](https://github.com/swaponline/MultiCurrencyWallet/blob/master/docs/ONBOARDING.md)
 
+## Ecosystem
+
+This wallet is part of the [onout.org](https://onout.org) open-source DeFi toolkit:
+
+| Product | Description | Live demo |
+|---------|-------------|-----------|
+| **[MultiCurrencyWallet](https://swaponline.github.io)** | ← you are here — crypto wallet + P2P swap | [wallet.wpmix.net](https://wallet.wpmix.net/) |
+| **[DEX](https://onout.org/dex/)** | Create your own DEX like Uniswap / PancakeSwap | [dex.onout.org](https://dex.onout.org/) |
+| **[Farming](https://onout.org/farming/)** | ERC20 staking & yield farming tool | [farm.onout.org](https://farm.onout.org/) |
+| **[CrossChain](https://onout.org/crosschain/)** | Cross-chain bridge for multi-chain ecosystem | [crosschain.onout.org](https://crosschain.onout.org/) |
+| **[DAO Widget](https://onout.org/dao/)** | Create your own DAO (Snapshot fork) | — |
+| **[NFTsy](https://onout.org/nft/)** | NFT showcase plugin | — |
+| **[PredictionMarket](https://onout.org/predictionmarket/)** | Create a prediction market like Polymarket | — |
+
 ---
 
 Any questions [are welcome](https://t.me/swaponline)

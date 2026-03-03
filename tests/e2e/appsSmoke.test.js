@@ -50,7 +50,9 @@ let browser
 let baseUrl
 
 beforeAll(async () => {
-  const args = process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : []
+  // --no-sandbox required on CI (GitHub Actions) and when running as root locally
+  const needsSandboxDisable = process.env.CI || process.getuid?.() === 0
+  const args = needsSandboxDisable ? ['--no-sandbox', '--disable-setuid-sandbox'] : []
   browser = await puppeteer.launch({ headless: true, args })
 
   // Determine the MCW file URL
@@ -73,6 +75,14 @@ async function newPage() {
   page.on('error', (err) => console.log('[puppeteer] error:', err))
   // domcontentloaded is sufficient for file:// URLs and speeds up loading significantly
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+  // Dismiss the splash-screen starter-modal: on a fresh browser (no cookies) the
+  // inline script in index.html shows it, which triggers CSS rule
+  //   .starter-modal:not(.d-none) ~ #root { display: none; }
+  // hiding the entire React app so getBoundingClientRect() returns 0 for everything.
+  await page.evaluate(() => {
+    const modal = document.getElementById('starter-modal')
+    if (modal) modal.classList.add('d-none')
+  })
   return page
 }
 
@@ -171,9 +181,13 @@ describe('Apps Catalog — iframe loads', () => {
         for (const btn of buttons) {
           const text = await page.evaluate((el) => el.textContent, btn)
           if (text && text.includes(app.title)) {
-            await btn.click()
-            clicked = true
-            break
+            try {
+              await btn.click()
+              clicked = true
+              break
+            } catch {
+              // button not clickable (e.g. hidden nav dropdown), try next
+            }
           }
         }
 
@@ -351,22 +365,52 @@ describe('App view — layout and UI', () => {
   it('app view is full-width (no container max-width constraint)', async () => {
     const page = await newPage()
     try {
-      await goToAppsPage(page)
       const targetApp = APPS[0]
-
-      const url = page.url().split('#')[0]
-      await page.goto(`${url}#/apps/${targetApp.id}`)
-      await timeOut(2_000)
+      // Navigate directly to app page with networkidle2 so that CSS + React are
+      // fully applied before we measure getBoundingClientRect().
+      // domcontentloaded is too early (styles not yet injected by webpack bundle).
+      // goToAppsPage sets SO_WalletAppsEnabled=true, navigates to #/apps,
+      // waits 1.5s — CSS and React are fully ready at that point.
+      // Then we do an in-page hash change (no full reload) so the flag stays.
+      await goToAppsPage(page)
+      await page.evaluate((appId) => { window.location.hash = `/apps/${appId}` }, targetApp.id)
+      // Wait for React Router re-render + layout (iframe must have non-zero width)
+      await page.waitForFunction(
+        () => {
+          const iframe = document.querySelector('iframe')
+          return iframe && iframe.getBoundingClientRect().width > 10
+        },
+        { timeout: 10_000 },
+      ).catch(() => {})
 
       // The iframe should be close to full viewport width
-      const iframeWidth = await page.evaluate(() => {
+      const diagInfo = await page.evaluate(() => {
         const iframe = document.querySelector('iframe')
-        if (!iframe) return 0
-        return iframe.getBoundingClientRect().width
+        const main = document.querySelector('main')
+        const iframeParent = iframe ? iframe.parentElement : null
+        const cs = iframe ? window.getComputedStyle(iframe) : null
+        const csParent = iframeParent ? window.getComputedStyle(iframeParent) : null
+        return {
+          hasIframe: !!iframe,
+          iframeWidth: iframe ? Math.round(iframe.getBoundingClientRect().width) : 0,
+          iframeSrc: iframe ? iframe.getAttribute('src') : null,
+          iframeDisplay: cs ? cs.display : null,
+          iframeVisibility: cs ? cs.visibility : null,
+          iframeCSWidth: cs ? cs.width : null,
+          parentWidth: iframeParent ? Math.round(iframeParent.getBoundingClientRect().width) : 0,
+          parentDisplay: csParent ? csParent.display : null,
+          parentClass: iframeParent ? iframeParent.className.slice(0, 60) : null,
+          mainWidth: main ? Math.round(main.getBoundingClientRect().width) : 0,
+          hasSecurityNotice: !!document.querySelector('[class*="securityNotice"]'),
+          hasBackButton: !!Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('All apps')),
+          url: window.location.href,
+        }
       })
       const viewportWidth = await page.evaluate(() => window.innerWidth)
 
-      console.log(`iframe width: ${iframeWidth}, viewport: ${viewportWidth}`)
+      console.log(`iframe diag:`, JSON.stringify(diagInfo))
+      console.log(`iframe width: ${diagInfo.iframeWidth}, viewport: ${viewportWidth}`)
+      const iframeWidth = diagInfo.iframeWidth
       // iframe should be at least 90% of viewport width (no container constraint)
       expect(iframeWidth).toBeGreaterThan(viewportWidth * 0.9)
 

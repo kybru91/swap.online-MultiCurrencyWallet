@@ -64,7 +64,8 @@ const Apps = (props: AppsProps) => {
     if (!selectedApp) return ''
     const base = resolveWalletAppUrl(selectedApp)
     if (selectedApp.isInternal) return base
-    const scheme = document.body.dataset.scheme || 'light'
+    const rawScheme = document.body.dataset.scheme || 'default'
+    const scheme = rawScheme === 'dark' ? 'dark' : 'light'
     const sep = base.includes('?') ? '&' : '?'
     return `${base}${sep}theme=${scheme}`
   }, [selectedApp])

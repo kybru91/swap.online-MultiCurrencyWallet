@@ -4,23 +4,12 @@ export default [
     exclude: /(node_modules|bower_components)/,
     use: [
       {
-        loader: 'babel-loader',
+        loader: 'esbuild-loader',
         options: {
-          presets: ['@babel/preset-env'],
-          plugins: ['@babel/plugin-proposal-object-rest-spread'],
-          cacheDirectory: true,
-        }
+          loader: 'tsx',
+          target: 'es2020',
+        },
       },
-    ],
-  },
-  {
-    test: /\.js$/,
-    enforce: 'pre',
-    exclude: /node_modules/,
-    use: [
-      {
-        loader: 'source-map-loader',
-      }
     ],
   },
 ]

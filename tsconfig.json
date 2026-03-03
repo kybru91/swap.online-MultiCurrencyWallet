@@ -62,7 +62,10 @@
       "domain/*": ["src/common/domain/*"],
 
       "common": ["src/common/"],
-      "common/*": ["src/common/*"]
+      "common/*": ["src/common/*"],
+
+      "web3connect": ["src/common/web3connect"],
+      "web3connect/*": ["src/common/web3connect/*"]
     }
   },
   "include": ["src/**/*", "tests"],

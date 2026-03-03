@@ -21,7 +21,9 @@
  * Prerequisites: build-testnet must exist (npm run build:testnet-tests)
  */
 
-const { createBrowser, timeOut, takeScreenshot } = require('./utils')
+const puppeteer = require('puppeteer')
+const { timeOut, takeScreenshot } = require('./utils')
+
 // App catalog — must stay in sync with appsCatalog.ts (same data, plain JS for e2e)
 const APPS = [
   {
@@ -38,52 +40,55 @@ const APPS = [
   },
 ]
 
-jest.setTimeout(300_000) // 5 minutes
+jest.setTimeout(300_000) // 5 minutes per test
+
+// ------------------------------------------------------------------
+// Shared browser — one launch for the whole suite
+// ------------------------------------------------------------------
+
+let browser
+let baseUrl
+
+beforeAll(async () => {
+  const args = process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : []
+  browser = await puppeteer.launch({ headless: true, args })
+
+  // Determine the MCW file URL (mirrors logic in utils.ts)
+  if (process.env.ACTIONS) {
+    baseUrl = `file:///home/runner/work/MultiCurrencyWallet/MultiCurrencyWallet/build-testnet/index.html`
+  } else {
+    baseUrl = 'http://localhost:9001/'
+  }
+}, 60_000)
+
+afterAll(async () => {
+  if (browser) await browser.close()
+})
+
+async function newPage() {
+  const page = await browser.newPage()
+  await page.setViewport({ width: 1100, height: 1080 })
+  page.on('error', (err) => console.log('[puppeteer] error:', err))
+  await page.goto(baseUrl)
+  return page
+}
 
 // ------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------
 
-/**
- * Navigate to #/apps (enabling apps via window override if needed).
- */
 async function goToAppsPage(page) {
-  // Enable apps feature at runtime (required when externalConfig.opts.ui.apps.enabled is false)
-  await page.evaluate(() => {
-    window.SO_WalletAppsEnabled = true
-  })
-
-  const baseUrl = page.url().split('#')[0]
-  await page.goto(`${baseUrl}#/apps`)
+  await page.evaluate(() => { window.SO_WalletAppsEnabled = true })
+  const url = page.url().split('#')[0]
+  await page.goto(`${url}#/apps`)
   await timeOut(3_000)
 }
 
-/**
- * Wait for an iframe whose src matches urlPattern to appear in page.frames().
- */
-async function waitForIframe(page, urlPattern, timeoutMs = 30_000) {
-  const pollInterval = 1_000
-  const maxAttempts = Math.ceil(timeoutMs / pollInterval)
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const frame = page.frames().find((f) => f.url().includes(urlPattern))
-    if (frame) return frame
-    await timeOut(pollInterval)
-  }
-
-  throw new Error(`Iframe with pattern "${urlPattern}" not found after ${timeoutMs}ms`)
-}
-
-/**
- * Check HTTP status of a URL using fetch inside the page context.
- * Returns the HTTP status code.
- */
 async function checkUrlReachable(page, url) {
   try {
     const status = await page.evaluate(async (targetUrl) => {
       try {
         const response = await fetch(targetUrl, { method: 'HEAD', mode: 'no-cors' })
-        // no-cors always returns opaque (status 0) but doesn't throw = reachable
         return response.type === 'opaque' ? 200 : response.status
       } catch (e) {
         return 0
@@ -101,27 +106,21 @@ async function checkUrlReachable(page, url) {
 
 describe('Apps Catalog — tile render', () => {
   it('all apps appear as tiles on #/apps page', async () => {
-    const { browser, page } = await createBrowser()
-
+    const page = await newPage()
     try {
       await goToAppsPage(page)
 
       for (const app of APPS) {
-        // Each app tile has data-app-id or contains the title text
         const tileSelector = `[data-app-id="${app.id}"], button`
         const tiles = await page.$$(tileSelector)
 
         let found = false
         for (const tile of tiles) {
           const text = await page.evaluate((el) => el.textContent, tile)
-          if (text && text.includes(app.title)) {
-            found = true
-            break
-          }
+          if (text && text.includes(app.title)) { found = true; break }
         }
 
         if (!found) {
-          // fallback: check page text
           const pageText = await page.evaluate(() => document.body.textContent)
           found = pageText.includes(app.title)
         }
@@ -135,7 +134,7 @@ describe('Apps Catalog — tile render', () => {
       await takeScreenshot(page, 'Apps_CatalogPage_Error')
       throw error
     } finally {
-      await browser.close()
+      await page.close()
     }
   })
 })
@@ -143,10 +142,8 @@ describe('Apps Catalog — tile render', () => {
 describe('Apps Catalog — iframe loads', () => {
   for (const app of APPS) {
     it(`${app.title} — external URL is reachable`, async () => {
-      const { browser, page } = await createBrowser()
-
+      const page = await newPage()
       try {
-        // Just check external URL responds (2xx or opaque via no-cors)
         const status = await checkUrlReachable(page, app.externalUrl)
         console.log(`${app.title} URL ${app.externalUrl} → status ${status}`)
         expect(status).toBeGreaterThanOrEqual(200)
@@ -154,19 +151,18 @@ describe('Apps Catalog — iframe loads', () => {
         await takeScreenshot(page, `Apps_UrlCheck_${app.id}_Error`)
         throw error
       } finally {
-        await browser.close()
+        await page.close()
       }
     })
 
     it(`${app.title} — clicking tile opens iframe`, async () => {
-      const { browser, page } = await createBrowser()
+      const page = await newPage()
       const consoleErrors = []
       page.on('pageerror', (err) => consoleErrors.push(err.message))
 
       try {
         await goToAppsPage(page)
 
-        // Find and click the app tile
         const buttons = await page.$$('button')
         let clicked = false
         for (const btn of buttons) {
@@ -179,35 +175,28 @@ describe('Apps Catalog — iframe loads', () => {
         }
 
         if (!clicked) {
-          // Navigate directly
-          const baseUrl = page.url().split('#')[0]
-          await page.goto(`${baseUrl}#/apps/${app.id}`)
+          const url = page.url().split('#')[0]
+          await page.goto(`${url}#/apps/${app.id}`)
         }
 
         await timeOut(2_000)
 
-        // Verify URL changed to #/apps/:id
         const currentUrl = page.url()
         console.log(`${app.title} — navigated to: ${currentUrl}`)
         expect(currentUrl).toContain(`/apps/${app.id}`)
 
-        // Verify iframe element exists in DOM
         const iframe = await page.$('iframe')
         expect(iframe).not.toBeNull()
         console.log(`${app.title} — iframe element found`)
 
-        // Wait for iframe to receive a src pointing to expected domain
         const iframeSrc = await page.evaluate((el) => el?.getAttribute('src'), iframe)
         console.log(`${app.title} — iframe src: ${iframeSrc}`)
         expect(iframeSrc).toContain(app.urlPattern)
 
-        // No critical page-level JS errors
         const critical = consoleErrors.filter(
           (e) => !e.includes('MetaMask') && !e.includes('ethereum')
         )
-        if (critical.length > 0) {
-          console.warn(`${app.title} — console errors:`, critical)
-        }
+        if (critical.length > 0) console.warn(`${app.title} — console errors:`, critical)
         expect(critical.length).toBe(0)
 
         await takeScreenshot(page, `Apps_IframeOpen_${app.id}`)
@@ -215,7 +204,7 @@ describe('Apps Catalog — iframe loads', () => {
         await takeScreenshot(page, `Apps_IframeOpen_${app.id}_Error`)
         throw error
       } finally {
-        await browser.close()
+        await page.close()
       }
     })
   }
@@ -223,12 +212,10 @@ describe('Apps Catalog — iframe loads', () => {
 
 describe('Apps nav dropdown', () => {
   it('hovering Apps nav item reveals dropdown with all app titles', async () => {
-    const { browser, page } = await createBrowser()
-
+    const page = await newPage()
     try {
       await goToAppsPage(page)
 
-      // Find the Apps nav link
       const appsNavLink = await page.evaluateHandle(() => {
         const links = Array.from(document.querySelectorAll('a, button'))
         return links.find(
@@ -243,16 +230,13 @@ describe('Apps nav dropdown', () => {
         return
       }
 
-      // Hover over the Apps link
       await appsNavLink.asElement().hover()
       await timeOut(500)
 
-      // Check that dropdown appears with all app titles
       const pageText = await page.evaluate(() => document.body.textContent)
       for (const app of APPS) {
-        const title = app.title
-        const found = pageText.includes(title)
-        console.log(`Dropdown item "${title}": ${found ? 'FOUND' : 'MISSING'}`)
+        const found = pageText.includes(app.title)
+        console.log(`Dropdown item "${app.title}": ${found ? 'FOUND' : 'MISSING'}`)
         expect(found).toBe(true)
       }
 
@@ -261,19 +245,17 @@ describe('Apps nav dropdown', () => {
       await takeScreenshot(page, 'Apps_NavDropdown_Error')
       throw error
     } finally {
-      await browser.close()
+      await page.close()
     }
   })
 
   it('clicking dropdown item navigates directly to that app', async () => {
-    const { browser, page } = await createBrowser()
-
+    const page = await newPage()
     try {
       await goToAppsPage(page)
 
-      const targetApp = APPS[APPS.length - 1] // PolyFactory (last added)
+      const targetApp = APPS[APPS.length - 1]
 
-      // Hover Apps nav link
       const appsNavLink = await page.evaluateHandle(() => {
         const links = Array.from(document.querySelectorAll('a, button'))
         return links.find(
@@ -291,7 +273,6 @@ describe('Apps nav dropdown', () => {
       await appsNavLink.asElement().hover()
       await timeOut(500)
 
-      // Click the target app's dropdown item
       const dropdownItem = await page.evaluateHandle((title) => {
         const links = Array.from(document.querySelectorAll('a'))
         return links.find((el) => el.textContent?.trim() === title)
@@ -313,7 +294,7 @@ describe('Apps nav dropdown', () => {
       await takeScreenshot(page, 'Apps_NavDropdown_Click_Error')
       throw error
     } finally {
-      await browser.close()
+      await page.close()
     }
   })
 })

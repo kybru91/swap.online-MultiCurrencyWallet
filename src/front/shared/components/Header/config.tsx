@@ -2,7 +2,7 @@ import { defineMessages } from 'react-intl'
 import links from 'helpers/links'
 import externalConfig from 'helpers/externalConfig'
 import metamask from 'helpers/metamask'
-import { getWalletAppById } from 'pages/Apps/appsCatalog'
+import { getWalletAppById, walletAppsCatalog } from 'pages/Apps/appsCatalog'
 
 
 const isWidgetBuild = externalConfig && externalConfig.isWidget
@@ -142,6 +142,10 @@ export const getMenuItems = (props) => {
       link: appsLink,
       exact: false,
       currentPageFlag: true,
+      dropdown: walletAppsCatalog.map((app) => ({
+        title: app.menuTitle || app.title,
+        link: `${links.apps}/${app.id}`,
+      })),
     },
     ...pinnedAppsMenuItems,
   ])

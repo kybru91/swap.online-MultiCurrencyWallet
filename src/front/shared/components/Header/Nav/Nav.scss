@@ -9,6 +9,70 @@
   position: relative;
 }
 
+.menuWithDropdown {
+  &:hover .dropdown {
+    display: block;
+  }
+}
+
+.dropdownArrow {
+  margin-left: 4px;
+  font-size: 10px;
+  vertical-align: middle;
+  opacity: 0.7;
+}
+
+.linkWithDropdown {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-color, #fff);
+  border: 1px solid var(--border-color, rgba(0,0,0,0.1));
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 180px;
+  z-index: 200;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+
+  // Invisible bridge so hover doesn't break when moving from link to dropdown
+  &::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 8px;
+  }
+}
+
+.dropdownItem {
+  display: block;
+  padding: 8px 16px;
+  color: var(--color-notice);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.1s ease, background 0.1s ease;
+
+  &:hover {
+    color: var(--color);
+    background: var(--color-background-secondary, rgba(0,0,0,0.04));
+  }
+}
+
+.dropdownItemActive {
+  color: var(--color) !important;
+  font-weight: 800;
+}
+
 .link {
   display: inline-flex;
   justify-content: space-between;

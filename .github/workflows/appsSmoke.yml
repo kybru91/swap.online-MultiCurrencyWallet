@@ -1,0 +1,64 @@
+name: Apps Smoke Tests
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'src/front/shared/pages/Apps/**'
+      - 'src/front/shared/components/Header/Nav/**'
+      - 'src/front/shared/components/Header/config.tsx'
+      - 'tests/e2e/appsSmoke.test.js'
+      - '.github/workflows/appsSmoke.yml'
+  pull_request:
+    paths:
+      - 'src/front/shared/pages/Apps/**'
+      - 'src/front/shared/components/Header/Nav/**'
+      - 'src/front/shared/components/Header/config.tsx'
+      - 'tests/e2e/appsSmoke.test.js'
+  workflow_dispatch:
+
+jobs:
+  apps-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18.20.0'
+
+      - name: Install dependencies
+        uses: bahmutov/npm-install@v1
+        with:
+          useLockFile: false
+
+      - name: Build testnet
+        run: npm run build:testnet-tests
+
+      - name: Install Chromium for Puppeteer
+        run: npx puppeteer browsers install chrome
+
+      - name: Run Apps smoke tests
+        run: |
+          mkdir -p ./tests/e2e/screenshots
+          npm run test:e2e_apps_smoke
+        env:
+          CI: true
+
+      - name: Upload screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: apps-smoke-failure-screenshots
+          path: ./tests/e2e/screenshots
+          if-no-files-found: ignore
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apps-smoke-screenshots
+          path: ./tests/e2e/screenshots
+          if-no-files-found: ignore

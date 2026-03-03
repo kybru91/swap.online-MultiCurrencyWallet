@@ -52,31 +52,47 @@ class Nav extends Component<NavProps, null> {
           {menu
             .filter(i => i.isDesktop !== false)
             .map((item, index) => {
-              const { title, link, exact, isExternal } = item
+              const { title, link, exact, isExternal, dropdown } = item
+
+              const linkNode = isExternal ? (
+                <a href={link} target="_blank" styleName="link">{title}</a>
+              ) : (
+                <NavLink
+                  key={index}
+                  exact={exact}
+                  className={`
+                    ${styles.link}
+                    ${dropdown ? styles.linkWithDropdown : ''}
+                    ${link && link.includes('exchange') ? 'reactour-exchange data-tut-widget-exchange' : ''}
+                  `}
+                  to={localisedUrl(locale, link)}
+                  activeClassName={styles.active}
+                >
+                  {title}
+                  {dropdown && <span styleName="dropdownArrow">▾</span>}
+                </NavLink>
+              )
 
               return (
-                <div styleName='mainMenu' key={index} className="data-tut-widget-tourFinish">
-                  {isExternal ? (
-                    <a
-                      href={link}
-                      target="_blank"
-                      styleName="link"
-                    >
-                      {title}
-                    </a>
-                  ) : (
-                    <NavLink
-                      key={index}
-                      exact={exact}
-                      className={`
-                        ${styles.link}
-                        ${link && link.includes('exchange') ? 'reactour-exchange data-tut-widget-exchange' : ''}
-                      `}
-                      to={localisedUrl(locale, link)}
-                      activeClassName={styles.active}
-                    >
-                      {title}
-                    </NavLink>
+                <div
+                  styleName={dropdown ? 'mainMenu menuWithDropdown' : 'mainMenu'}
+                  key={index}
+                  className="data-tut-widget-tourFinish"
+                >
+                  {linkNode}
+                  {dropdown && (
+                    <div styleName="dropdown">
+                      {dropdown.map((sub, subIndex) => (
+                        <NavLink
+                          key={subIndex}
+                          to={localisedUrl(locale, sub.link)}
+                          styleName="dropdownItem"
+                          activeClassName={styles.dropdownItemActive}
+                        >
+                          {sub.title}
+                        </NavLink>
+                      ))}
+                    </div>
                   )}
                 </div>
               );

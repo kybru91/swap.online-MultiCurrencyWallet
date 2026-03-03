@@ -34,6 +34,7 @@
     "test:e2e_balanceDisplay": "jest tests/e2e/wallet/balanceDisplay.test.ts --detectOpenHandles",
     "test:e2e_withdraw": "jest tests/e2e/withdraw.test.ts --detectOpenHandles",
     "test:e2e_history": "jest tests/e2e/history.test.ts --detectOpenHandles",
+    "test:e2e_apps_smoke": "ACTIONS=true jest tests/e2e/appsSmoke.test.js --detectOpenHandles",
     "test:e2e:actions": "ACTIONS=true jest --findRelatedTests tests/e2e/*.test.ts tests/e2e/wallet/*.test.ts --detectOpenHandles",
     "eslint": "eslint --fix --cache ./shared --ext js",
     "prettier": "prettier --ignore-path .gitignore \"**/*.+(js|json|ts|tsx)\" --write",

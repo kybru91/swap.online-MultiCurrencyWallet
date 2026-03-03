@@ -60,7 +60,14 @@ const Apps = (props: AppsProps) => {
     }
   }, [routeAppId, history, locale])
 
-  const appUrl = selectedApp ? resolveWalletAppUrl(selectedApp) : ''
+  const appUrl = useMemo(() => {
+    if (!selectedApp) return ''
+    const base = resolveWalletAppUrl(selectedApp)
+    if (selectedApp.isInternal) return base
+    const scheme = document.body.dataset.scheme || 'light'
+    const sep = base.includes('?') ? '&' : '?'
+    return `${base}${sep}theme=${scheme}`
+  }, [selectedApp])
   const isAllowedAppUrl = selectedApp ? isAllowedWalletAppUrl(appUrl) : false
   const needsBridge = selectedApp?.walletBridge === 'eip1193'
 
@@ -79,7 +86,6 @@ const Apps = (props: AppsProps) => {
       appUrl,
       internalWallet: ethData,
     })
-    bridgeRef.current.sendReady()
 
     return () => {
       if (bridgeRef.current) {
@@ -103,102 +109,88 @@ const Apps = (props: AppsProps) => {
     }
   }
 
+  if (selectedApp) {
+    return (
+      <section styleName="appsPageFull">
+        <div styleName="appsSwitchRow">
+          <button
+            type="button"
+            styleName="appsBackButton"
+            onClick={handleOpenCatalog}
+          >
+            ← <FormattedMessage id="Apps_AllApps" defaultMessage="All apps" />
+          </button>
+          <span styleName="appCurrentTitle">{selectedApp.menuTitle || selectedApp.title}</span>
+        </div>
+
+        {!isAllowedAppUrl && (
+          <div className="container">
+            <div styleName="securityNotice">
+              <FormattedMessage
+                id="Apps_SecurityNotice"
+                defaultMessage="Blocked by allowlist policy. Add app host to allowlist before embedding."
+              />
+            </div>
+          </div>
+        )}
+
+        {isAllowedAppUrl && (
+          <iframe
+            key={selectedApp.id}
+            ref={iframeRef}
+            title={selectedApp.title}
+            src={appUrl}
+            onLoad={handleAppFrameLoad}
+            styleName="appFrame"
+            sandbox="allow-forms allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            allow="clipboard-read; clipboard-write"
+          />
+        )}
+      </section>
+    )
+  }
+
   return (
     <div className="container">
       <section styleName="appsPage">
-        {!selectedApp && (
-          <header styleName="header">
-            <h1 styleName="title">
-              <FormattedMessage
-                id="Apps_Title"
-                defaultMessage="Wallet Apps"
-              />
-            </h1>
-            <p styleName="description">
-              <FormattedMessage
-                id="Apps_Description"
-                defaultMessage="Open integrated dApps inside wallet UI for seamless flow."
-              />
-            </p>
-          </header>
-        )}
+        <header styleName="header">
+          <h1 styleName="title">
+            <FormattedMessage
+              id="Apps_Title"
+              defaultMessage="Wallet Apps"
+            />
+          </h1>
+          <p styleName="description">
+            <FormattedMessage
+              id="Apps_Description"
+              defaultMessage="Open integrated dApps inside wallet UI for seamless flow."
+            />
+          </p>
+        </header>
 
-        {!selectedApp && (
-          <section styleName="appsCatalogGrid">
-            {walletAppsCatalog.map((app) => (
-              <button
-                key={app.id}
-                type="button"
-                styleName="appTile"
-                onClick={() => handleOpenApp(app.id)}
-              >
-                <div styleName="appIconWrap">
-                  <span styleName="appIconFallback">{app.iconSymbol || app.title.charAt(0)}</span>
-                </div>
-                <div styleName="appTileTitle">{app.title}</div>
-                {app.isInternal && (
-                  <span styleName="appLabel">
-                    <FormattedMessage
-                      id="Apps_Internal"
-                      defaultMessage="Internal"
-                    />
-                  </span>
-                )}
-              </button>
-            ))}
-          </section>
-        )}
-
-        {selectedApp && (
-          <>
-            <section styleName="appsSwitchRow">
-              <button
-                type="button"
-                styleName="appsBackButton"
-                onClick={handleOpenCatalog}
-              >
-                <FormattedMessage
-                  id="Apps_AllApps"
-                  defaultMessage="All apps"
-                />
-              </button>
-              {walletAppsCatalog.map((app) => (
-                <button
-                  key={app.id}
-                  type="button"
-                  styleName={`appTab ${app.id === selectedApp.id ? 'isSelected' : ''}`}
-                  onClick={() => handleOpenApp(app.id)}
-                >
-                  <span styleName="appTabIcon">
-                    {app.iconSymbol || app.title.charAt(0)}
-                  </span>
-                  <span styleName="appTabText">{app.menuTitle || app.title}</span>
-                </button>
-              ))}
-            </section>
-            {!isAllowedAppUrl && (
-              <div styleName="securityNotice">
-                <FormattedMessage
-                  id="Apps_SecurityNotice"
-                  defaultMessage="Blocked by allowlist policy. Add app host to allowlist before embedding."
-                />
+        <section styleName="appsCatalogGrid">
+          {walletAppsCatalog.map((app) => (
+            <button
+              key={app.id}
+              type="button"
+              styleName="appTile"
+              onClick={() => handleOpenApp(app.id)}
+            >
+              <div styleName="appIconWrap">
+                <span styleName="appIconFallback">{app.iconSymbol || app.title.charAt(0)}</span>
               </div>
-            )}
-
-            {isAllowedAppUrl && (
-              <iframe
-                key={selectedApp.id}
-                ref={iframeRef}
-                title={selectedApp.title}
-                src={appUrl}
-                onLoad={handleAppFrameLoad}
-                styleName="appFrame"
-                sandbox="allow-forms allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
-                allow="clipboard-read; clipboard-write"
-              />
-            )}
-          </>
-        )}
+              <div styleName="appTileTitle">{app.title}</div>
+              {app.isInternal && (
+                <span styleName="appLabel">
+                  <FormattedMessage
+                    id="Apps_Internal"
+                    defaultMessage="Internal"
+                  />
+                </span>
+              )}
+            </button>
+          ))}
+        </section>
       </section>
     </div>
   )

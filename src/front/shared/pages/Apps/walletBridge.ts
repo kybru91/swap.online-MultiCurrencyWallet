@@ -196,17 +196,18 @@ export const createWalletAppsBridge = ({
         if (method === 'eth_accounts') {
           return [internalWallet.address]
         }
-        if (method === 'eth_chainId') {
-          // Return current network chain ID (default to mainnet for now)
-          return '0x1'
-        }
         if (method === 'eth_requestAccounts') {
           return [internalWallet.address]
         }
-        // For other methods, throw unsupported error
+        // Forward all other methods (eth_call, eth_chainId, eth_getBalance, etc.)
+        // to the external EIP-1193 provider (e.g. MetaMask/window.ethereum)
+        const externalProvider = getEip1193Provider()
+        if (externalProvider) {
+          return externalProvider.request({ method, params })
+        }
         throw {
           code: 4200,
-          message: `Method ${method} not supported by internal wallet provider`
+          message: `Method ${method} not supported by internal wallet provider`,
         }
       },
     }

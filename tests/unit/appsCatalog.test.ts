@@ -23,7 +23,15 @@ describe('Wallet Apps Catalog', () => {
 
   it('allows only configured external hosts in allowlist', () => {
     expect(isAllowedWalletAppUrl('https://dex.onout.org/')).toBe(true)
-    expect(isAllowedWalletAppUrl('https://app.uniswap.org/#/swap')).toBe(true)
+    expect(isAllowedWalletAppUrl('https://polyfactory.wpmix.net/')).toBe(true)
     expect(isAllowedWalletAppUrl('https://evil.example.com/')).toBe(false)
+  })
+
+  it('polyfactory app exists with eip1193 bridge', () => {
+    const app = getWalletAppById('polyfactory')
+    expect(app).toBeDefined()
+    expect(app!.walletBridge).toBe('eip1193')
+    expect(app!.routeUrl).toContain('polyfactory.wpmix.net')
+    expect(app!.routeUrl).toContain('walletBridge=swaponline')
   })
 })

@@ -192,6 +192,8 @@ describe('Apps Catalog — iframe loads', () => {
         const iframeSrc = await page.evaluate((el) => el?.getAttribute('src'), iframe)
         console.log(`${app.title} — iframe src: ${iframeSrc}`)
         expect(iframeSrc).toContain(app.urlPattern)
+        // Verify theme is forwarded to iframe URL
+        expect(iframeSrc).toMatch(/theme=(dark|light)/)
 
         const critical = consoleErrors.filter(
           (e) => !e.includes('MetaMask') && !e.includes('ethereum')
@@ -292,6 +294,82 @@ describe('Apps nav dropdown', () => {
       }
     } catch (error) {
       await takeScreenshot(page, 'Apps_NavDropdown_Click_Error')
+      throw error
+    } finally {
+      await page.close()
+    }
+  })
+})
+
+describe('App view — layout and UI', () => {
+  it('no duplicate app tabs in switch row (only Back button + app title)', async () => {
+    const page = await newPage()
+    try {
+      await goToAppsPage(page)
+      const targetApp = APPS[0]
+
+      // Navigate to first app
+      const url = page.url().split('#')[0]
+      await page.goto(`${url}#/apps/${targetApp.id}`)
+      await timeOut(2_000)
+
+      // Switch row should have the Back button text
+      const backBtn = await page.evaluateHandle(() => {
+        const btns = Array.from(document.querySelectorAll('button'))
+        return btns.find((b) => b.textContent?.includes('All apps'))
+      })
+      expect(backBtn.asElement()).not.toBeNull()
+      console.log('Back button found ✓')
+
+      // Switch row should NOT contain other app titles as separate buttons
+      const appTabButtons = await page.evaluate((appTitles) => {
+        const btns = Array.from(document.querySelectorAll('button'))
+        return appTitles.filter((title) =>
+          btns.some(
+            (b) =>
+              b.textContent?.trim() === title &&
+              !b.textContent?.includes('All apps')
+          )
+        )
+      }, APPS.map((a) => a.title))
+
+      console.log('App tab buttons found:', appTabButtons)
+      expect(appTabButtons.length).toBe(0)
+
+      await takeScreenshot(page, 'Apps_SwitchRow_NoTabs')
+    } catch (error) {
+      await takeScreenshot(page, 'Apps_SwitchRow_Error')
+      throw error
+    } finally {
+      await page.close()
+    }
+  })
+
+  it('app view is full-width (no container max-width constraint)', async () => {
+    const page = await newPage()
+    try {
+      await goToAppsPage(page)
+      const targetApp = APPS[0]
+
+      const url = page.url().split('#')[0]
+      await page.goto(`${url}#/apps/${targetApp.id}`)
+      await timeOut(2_000)
+
+      // The iframe should be close to full viewport width
+      const iframeWidth = await page.evaluate(() => {
+        const iframe = document.querySelector('iframe')
+        if (!iframe) return 0
+        return iframe.getBoundingClientRect().width
+      })
+      const viewportWidth = await page.evaluate(() => window.innerWidth)
+
+      console.log(`iframe width: ${iframeWidth}, viewport: ${viewportWidth}`)
+      // iframe should be at least 90% of viewport width (no container constraint)
+      expect(iframeWidth).toBeGreaterThan(viewportWidth * 0.9)
+
+      await takeScreenshot(page, 'Apps_FullWidth')
+    } catch (error) {
+      await takeScreenshot(page, 'Apps_FullWidth_Error')
       throw error
     } finally {
       await page.close()

@@ -1,5 +1,8 @@
 /* eslint-disable no-await-in-loop */
 /**
+ * @jest-environment node
+ */
+/**
  * Apps Smoke Test
  *
  * Verifies that every app in walletAppsCatalog:

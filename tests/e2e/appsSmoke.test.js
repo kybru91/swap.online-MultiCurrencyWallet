@@ -53,8 +53,10 @@ beforeAll(async () => {
   const args = process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : []
   browser = await puppeteer.launch({ headless: true, args })
 
-  // Determine the MCW file URL (mirrors logic in utils.ts)
-  if (process.env.ACTIONS) {
+  // Determine the MCW file URL
+  if (process.env.BUILD_PATH) {
+    baseUrl = process.env.BUILD_PATH
+  } else if (process.env.ACTIONS) {
     baseUrl = `file:///home/runner/work/MultiCurrencyWallet/MultiCurrencyWallet/build-testnet/index.html`
   } else {
     baseUrl = 'http://localhost:9001/'

@@ -26,6 +26,7 @@ export const createBrowser = async (): Promise<{
   const browser = await puppeteer.launch({
     headless: !isDebug,
     // slowMo: 100,
+    args: process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : [],
   })
 
   const page = await browser.newPage()

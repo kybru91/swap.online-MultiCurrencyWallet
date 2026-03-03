@@ -12,6 +12,7 @@ export type WalletApp = {
 
 const EXTERNAL_ALLOWED_HOSTS = new Set([
   'dex.onout.org',
+  'polyfactory.wpmix.net',
 ])
 
 export const walletAppsCatalog: WalletApp[] = [
@@ -34,6 +35,16 @@ export const walletAppsCatalog: WalletApp[] = [
     iconSymbol: 'OD',
     routeUrl: 'https://dex.onout.org/?walletBridge=swaponline',
     supportedChains: ['Ethereum', 'BSC', 'Polygon'],
+    walletBridge: 'eip1193',
+  },
+  {
+    id: 'polyfactory',
+    title: 'PolyFactory',
+    menuTitle: 'PolyFactory',
+    description: 'Prediction markets on BSC Testnet. Trade YES/NO outcomes with CLOB orderbook.',
+    iconSymbol: 'PF',
+    routeUrl: 'https://polyfactory.wpmix.net/?walletBridge=swaponline',
+    supportedChains: ['BSC'],
     walletBridge: 'eip1193',
   },
 ]

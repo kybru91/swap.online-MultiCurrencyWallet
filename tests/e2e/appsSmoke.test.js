@@ -69,7 +69,8 @@ async function newPage() {
   const page = await browser.newPage()
   await page.setViewport({ width: 1100, height: 1080 })
   page.on('error', (err) => console.log('[puppeteer] error:', err))
-  await page.goto(baseUrl)
+  // domcontentloaded is sufficient for file:// URLs and speeds up loading significantly
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
   return page
 }
 
@@ -80,8 +81,8 @@ async function newPage() {
 async function goToAppsPage(page) {
   await page.evaluate(() => { window.SO_WalletAppsEnabled = true })
   const url = page.url().split('#')[0]
-  await page.goto(`${url}#/apps`)
-  await timeOut(3_000)
+  await page.goto(`${url}#/apps`, { waitUntil: 'domcontentloaded' })
+  await timeOut(1_500)
 }
 
 async function checkUrlReachable(page, url) {

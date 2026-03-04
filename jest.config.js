@@ -18,6 +18,8 @@ module.exports = {
   ],
   moduleNameMapper: {
     "^redux/(.*)$": "<rootDir>/src/front/shared/redux/$1",
+    "\\.(png|jpg|jpeg|gif|svg|ico|webp)$": "<rootDir>/tests/__mocks__/fileMock.js",
+    "\\.(css|scss|less)$": "<rootDir>/tests/__mocks__/fileMock.js",
   },
   transformIgnorePatterns: [
     "/node_modules/(?!(ethereumjs-wallet|uuid|@ethereumjs)/)",

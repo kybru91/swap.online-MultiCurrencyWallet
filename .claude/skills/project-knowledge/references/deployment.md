@@ -65,6 +65,36 @@ Fully automated via CI. Push to `master` → build → deploy → live.
 - [ ] Check https://swaponline.github.io loads
 - [ ] Verify wallet creation works (testnet mode recommended first)
 - [ ] Check P2P order book connects (libp2p peers visible)
+- [ ] Check https://swaponline.github.io/#/apps — all 6 app tiles visible with card images
+- [ ] Open Onout DEX tile — iframe loads dex.onout.org with theme param
+
+## GitHub Actions Workflows
+
+| Workflow | File | Trigger | What It Does |
+|----------|------|---------|--------------|
+| **Deploy MCW** | `deploymaster.yml` | push to `master` | Builds mainnet bundle → pushes to swaponline.github.io. Includes Puppeteer health check verifying `/#/wallet` loads without JS errors. |
+| **Deploy WordPress Plugin** | `deploy.yml` | push to `master`/`main` | Builds mainnet+testnet widgets → packages as ZIP → uploads to farm.wpmix.net/updates/ → updates mcw-info.json |
+| **Apps Smoke** | `appsSmoke.yml` | changes in `Apps/**`, `Header/Nav/**`, `appsSmoke.test.js` | Builds testnet → runs 9 E2E smoke tests via Puppeteer (catalog tiles, iframe navigation, theme forwarding, external URL reachability) |
+
+### Apps Catalog E2E Tests
+
+File: `tests/e2e/appsSmoke.test.js`
+
+The `APPS` array in this file is a **manual copy** of `appsCatalog.ts`. When adding a new app to the catalog, MUST update both files.
+
+Currently tracked apps: `onout-dex`, `polyfactory`, `farm-factory`, `ido-launchpad`, `crypto-lottery`
+
+### walletBridge Integration in External Apps
+
+When adding a new external app to the catalog:
+1. Add hostname to `EXTERNAL_ALLOWED_HOSTS` in `appsCatalog.ts`
+2. Add `walletBridge: 'eip1193'` to the catalog entry
+3. The external app MUST have bridge client support:
+   - Check if `wallet-bridge-init.js` is present in the app's HTML `<head>`
+   - Bridge client URL: `https://swaponline.github.io/wallet-apps-bridge-client.js`
+   - Detection: `?walletBridge=swaponline` URL param + iframe check
+4. Add card screenshot PNG to `src/front/shared/pages/Apps/images/{app-id}.png`
+5. Update `APPS` array in `tests/e2e/appsSmoke.test.js`
 
 ---
 

@@ -166,9 +166,15 @@ const Apps = (props: AppsProps) => {
               styleName="appTile"
               onClick={() => handleOpenApp(app.id)}
             >
-              <div styleName="appIconWrap">
-                <span styleName="appIconFallback">{app.iconSymbol || app.title.charAt(0)}</span>
-              </div>
+              {app.cardImage ? (
+                <div styleName="appCardWrap">
+                  <img src={app.cardImage} alt={app.title} styleName="appCardImage" />
+                </div>
+              ) : (
+                <div styleName="appIconWrap">
+                  <span styleName="appIconFallback">{app.iconSymbol || app.title.charAt(0)}</span>
+                </div>
+              )}
               <div styleName="appTileTitle">{app.title}</div>
               {app.isInternal && (
                 <span styleName="appLabel">

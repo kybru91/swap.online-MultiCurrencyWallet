@@ -1,9 +1,16 @@
+import imgDex from './images/onout-dex.png'
+import imgPolyfactory from './images/polyfactory.png'
+import imgFarmFactory from './images/farm-factory.png'
+import imgLaunchpad from './images/ido-launchpad.png'
+import imgLottery from './images/crypto-lottery.png'
+
 export type WalletApp = {
   id: string
   title: string
   menuTitle?: string
   description: string
   iconSymbol?: string
+  cardImage?: string
   routeUrl: string
   supportedChains: string[]
   walletBridge?: 'none' | 'eip1193'
@@ -13,6 +20,9 @@ export type WalletApp = {
 const EXTERNAL_ALLOWED_HOSTS = new Set([
   'dex.onout.org',
   'polyfactory.wpmix.net',
+  'farm.wpmix.net',
+  'launchpad.onout.org',
+  'lottery.onout.org',
 ])
 
 export const walletAppsCatalog: WalletApp[] = [
@@ -33,6 +43,7 @@ export const walletAppsCatalog: WalletApp[] = [
     menuTitle: 'Onout DEX',
     description: 'Onout DEX opened inside wallet container for seamless swap flow.',
     iconSymbol: 'OD',
+    cardImage: imgDex,
     routeUrl: 'https://dex.onout.org/?walletBridge=swaponline',
     supportedChains: ['Ethereum', 'BSC', 'Polygon'],
     walletBridge: 'eip1193',
@@ -43,8 +54,42 @@ export const walletAppsCatalog: WalletApp[] = [
     menuTitle: 'PolyFactory',
     description: 'Prediction markets on BSC Testnet. Trade YES/NO outcomes with CLOB orderbook.',
     iconSymbol: 'PF',
+    cardImage: imgPolyfactory,
     routeUrl: 'https://polyfactory.wpmix.net/?walletBridge=swaponline',
     supportedChains: ['BSC'],
+    walletBridge: 'eip1193',
+  },
+  {
+    id: 'farm-factory',
+    title: 'FarmFactory',
+    menuTitle: 'FarmFactory',
+    description: 'Yield farming and liquidity pools. Stake LP tokens, earn rewards on BSC and Ethereum.',
+    iconSymbol: 'FF',
+    cardImage: imgFarmFactory,
+    routeUrl: 'https://farm.wpmix.net/?walletBridge=swaponline',
+    supportedChains: ['BSC', 'Ethereum'],
+    walletBridge: 'eip1193',
+  },
+  {
+    id: 'ido-launchpad',
+    title: 'IDO Launchpad',
+    menuTitle: 'Launchpad',
+    description: 'Token launchpad for IDO and IEO sales. Participate in new DeFi project launches.',
+    iconSymbol: 'IL',
+    cardImage: imgLaunchpad,
+    routeUrl: 'https://launchpad.onout.org/?walletBridge=swaponline',
+    supportedChains: ['Ethereum', 'BSC', 'Polygon'],
+    walletBridge: 'eip1193',
+  },
+  {
+    id: 'crypto-lottery',
+    title: 'Crypto Lottery',
+    menuTitle: 'Lottery',
+    description: 'On-chain lottery with provably fair draws. Buy tickets, win crypto prizes.',
+    iconSymbol: 'CL',
+    cardImage: imgLottery,
+    routeUrl: 'https://lottery.onout.org/?walletBridge=swaponline',
+    supportedChains: ['Ethereum', 'BSC'],
     walletBridge: 'eip1193',
   },
 ]

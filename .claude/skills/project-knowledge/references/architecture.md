@@ -31,6 +31,7 @@ Technical architecture overview for AI agents. Helps agents understand HOW the s
 │   │   ├── shared/         # Main application code
 │   │   │   ├── redux/      # State (redaction v5, NOT raw Redux)
 │   │   │   ├── pages/      # Route components (Wallet, Exchange, Swap, Apps)
+│   │   │   └── Apps/   # dApp catalog: appsCatalog.ts, walletBridge.ts, images/
 │   │   │   ├── components/ # Reusable UI components
 │   │   │   ├── helpers/    # Per-currency blockchain helpers
 │   │   │   └── routes/     # React Router v5 routes
@@ -58,13 +59,14 @@ Technical architecture overview for AI agents. Helps agents understand HOW the s
 ## Key Dependencies
 
 **Critical packages:**
-- `web3@1.10` - Ethereum/EVM interaction (send transactions, contract calls)
+- `web3@1.10` - Ethereum/EVM interaction (send transactions, contract calls, atomic swap mechanics)
 - `bitcoinjs-lib@5.1.6` - Bitcoin transactions (UTXO management, signing)
 - `libp2p@0.33` + `libp2p-gossipsub` - P2P networking for decentralized order book
 - `redaction@5` - Redux wrapper (auto-generates action types from reducer names)
 - `react-router-dom@5.x` - Routing (v5, NOT v6 - uses `<Switch>`/`<Route>`)
 - `bignumber.js` - Precise crypto arithmetic (avoids floating-point errors)
-- `@walletconnect/client@1.3` - WalletConnect v1 integration
+- `@reown/appkit` + `@reown/appkit-adapter-wagmi` - External wallet connection UI (WalletConnect v2, MetaMask, injected wallets). WC Project ID: `a23677c4af3139b4eccb52981f76ad94`
+- `wagmi v2` + `viem` - EVM wallet state hooks and type-safe RPC client
 - `bip39` + `bip32` - HD wallet key derivation from mnemonic
 
 <!-- Add 3-5 most important dependencies. Skip obvious ones like React, Express basics -->

@@ -38,6 +38,24 @@ const APPS = [
     urlPattern: 'polyfactory.wpmix.net',
     externalUrl: 'https://polyfactory.wpmix.net/',
   },
+  {
+    id: 'farm-factory',
+    title: 'FarmFactory',
+    urlPattern: 'farm.wpmix.net',
+    externalUrl: 'https://farm.wpmix.net/',
+  },
+  {
+    id: 'ido-launchpad',
+    title: 'IDO Launchpad',
+    urlPattern: 'launchpad.onout.org',
+    externalUrl: 'https://launchpad.onout.org/',
+  },
+  {
+    id: 'crypto-lottery',
+    title: 'Crypto Lottery',
+    urlPattern: 'lottery.onout.org',
+    externalUrl: 'https://lottery.onout.org/',
+  },
 ]
 
 jest.setTimeout(300_000) // 5 minutes per test

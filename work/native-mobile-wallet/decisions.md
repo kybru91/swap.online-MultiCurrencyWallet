@@ -268,3 +268,27 @@ All findings fixed in commit a42dd7b7d.
 - WebView security: allowFileAccess=false, mixedContentMode=MIXED_CONTENT_NEVER_ALLOW, geolocationEnabled=false confirmed
 - URL validation: https allowed, http/file/javascript/data blocked, private IPs blocked
 - Function decoding: transfer/approve/swap selectors decoded, MAX_UINT256 unlimited approval detected
+
+## Task 13: Settings, White-label, Crashlytics
+
+**Status:** Done
+**Commit:** 251f888c6, 7d57c9e2d
+**Agent:** settings-engineer
+**Summary:** Implemented SettingsScreen replacing SettingsStubScreen with custom RPC URL config (HTTPS-only + private IP validation via RpcUrlValidator from :core:network), network selector (ETH/BSC/Polygon with restart dialog), and backup wallet flow (mnemonic display with FLAG_SECURE). White-label support: applicationId and APP_NAME overridable via Gradle properties (-PAPP_ID, -PAPP_NAME), exposed as both resValue and buildConfigField. Firebase Crashlytics: SecureCrashlyticsTree (Timber tree) strips DEBUG logs in release and sanitizes all messages via SecureLogSanitizer (redacts WIF keys, ETH hex keys, mnemonics, bcrypt hashes). TxLogger provides structured tx lifecycle logging with only safe fields (tx hash, status, chain, error message).
+**Deviations:** None. All features match tech-spec requirements exactly.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer-13: 3 findings (1 minor hardcoded app name, 1 low unused SnackbarHostState, 1 info) -> [logs/working/task-13/code-reviewer-13-round1.json]
+- infrastructure-reviewer-13: OK (5 info, build config correct) -> [logs/working/task-13/infrastructure-reviewer-13-round1.json]
+
+*Round 2 (after fixes):*
+- code-reviewer-13: OK -> [logs/working/task-13/code-reviewer-13-round2.json]
+
+**Verification:**
+- `./gradlew :app:testDebugUnitTest` -> BUILD SUCCESSFUL, 90 tests passed (26 new + 64 existing)
+- All 4 TDD anchors pass: testRpcUrlValidationHttps, testRpcUrlValidationHttp, testRpcUrlValidationPrivateIp, testCrashlyticsLogging
+- RPC validation: HTTPS allowed, HTTP/file/empty rejected, private IPs (192.168/10.0/172.16/127.0/localhost) all blocked
+- Secret-safe logging: WIF keys, ETH hex keys, mnemonics, bcrypt hashes all redacted in sanitizer output
+- White-label: APP_NAME and APP_ID configurable via Gradle properties, no hardcoded branding

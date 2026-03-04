@@ -55,27 +55,33 @@ class SendViewModelTest {
   private val testBtcWIF = "L1RzGGsYw7iFocm9v4gLPihmTJagbBwRaApK1KnDCqeFE7GEDhsz"
   private val testEthHex = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
+  // Distinct recipient addresses (different from sender addresses above)
+  private val recipientBtcAddress = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+  private val recipientEthAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+  private val recipientEthLowercase = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+  private val recipientEthUppercase = "0xD8DA6BF26964AF9D7EED9E03E53415D37AA96045"
+  private val recipientEthBadMixedCase = "0xd8dA6BF26964Af9d7eed9e03e53415d37aa96045"
+
   /**
-   * Test checksum provider that returns the address as-is if it matches
-   * the expected checksummed form, or a lowercase version for "not checksummed" testing.
+   * Test checksum provider that returns the correctly checksummed form.
+   * Known checksummed addresses return as-is; others return a different casing
+   * (simulating that the input doesn't match the EIP-55 checksum).
    */
   private val testChecksumProvider = object : AddressChecksumProvider {
+    // Known correctly-checksummed addresses
+    private val validChecksums = setOf(
+      "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+      "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    )
+
     override fun toChecksumAddress(address: String): String {
-      // Known checksummed addresses return as-is
-      if (address == "0x9858EfFD232B4033E47d90003D41EC34EcaEda94") return address
-      // Lowercase input: return mixed-case checksum form (different from input)
-      if (address == address.lowercase() && address.startsWith("0x")) {
-        return "0x" + address.removePrefix("0x").uppercase().take(20) +
-          address.removePrefix("0x").lowercase().drop(20)
-      }
-      // All-uppercase input: return mixed-case (different from input)
-      if (address.removePrefix("0x") == address.removePrefix("0x").uppercase()) {
-        return "0x" + address.removePrefix("0x").lowercase().take(20) +
-          address.removePrefix("0x").uppercase().drop(20)
-      }
-      // Mixed case but not matching the known checksummed address: return different
-      return "0x" + address.removePrefix("0x").lowercase().take(10) +
-        address.removePrefix("0x").uppercase().drop(10)
+      // Return the address unchanged if it already matches the correct checksum
+      if (address in validChecksums) return address
+      // For any address that matches a known one case-insensitively, return the correct form
+      val correct = validChecksums.find { it.equals(address, ignoreCase = true) }
+      if (correct != null) return correct
+      // Unknown addresses: return a deterministic different form (always lowercase hex)
+      return "0x" + address.removePrefix("0x").removePrefix("0X").lowercase()
     }
   }
 
@@ -179,14 +185,14 @@ class SendViewModelTest {
   @Test
   fun `testAddressValidationEth - checksummed address passes`() {
     val vm = createEvmViewModel()
-    val result = vm.validateAddress("0x9858EfFD232B4033E47d90003D41EC34EcaEda94")
+    val result = vm.validateAddress(recipientEthAddress)
     assertEquals(AddressValidation.Valid, result)
   }
 
   @Test
   fun `testAddressValidationEth - lowercase address returns warning`() {
     val vm = createEvmViewModel()
-    val result = vm.validateAddress("0x9858effd232b4033e47d90003d41ec34ecaeda94")
+    val result = vm.validateAddress(recipientEthLowercase)
     assertTrue(
       "Lowercase EVM address should return checksum warning",
       result is AddressValidation.ChecksumWarning
@@ -196,7 +202,7 @@ class SendViewModelTest {
   @Test
   fun `testAddressValidationEth - uppercase address returns warning`() {
     val vm = createEvmViewModel()
-    val result = vm.validateAddress("0x9858EFFD232B4033E47D90003D41EC34ECAEDA94")
+    val result = vm.validateAddress(recipientEthUppercase)
     assertTrue(
       "All-uppercase EVM address should return checksum warning",
       result is AddressValidation.ChecksumWarning
@@ -232,9 +238,27 @@ class SendViewModelTest {
   }
 
   @Test
+  fun `testAddressValidationBtc - self-send returns error`() {
+    val vm = createBtcViewModel()
+    val result = vm.validateAddress(testBtcAddress)
+    assertTrue("Self-send should be rejected", result is AddressValidation.Invalid)
+    assertTrue(
+      "Should mention own address",
+      (result as AddressValidation.Invalid).message.contains("own address")
+    )
+  }
+
+  @Test
+  fun `testAddressValidationEth - self-send returns error`() {
+    val vm = createEvmViewModel()
+    val result = vm.validateAddress(testEthAddress)
+    assertTrue("Self-send should be rejected", result is AddressValidation.Invalid)
+  }
+
+  @Test
   fun `testAddressValidationEth - invalid mixed case returns warning`() {
     val vm = createEvmViewModel()
-    val result = vm.validateAddress("0x9858EfFD232b4033e47d90003d41ec34ecaeda94")
+    val result = vm.validateAddress(recipientEthBadMixedCase)
     assertTrue(
       "Incorrectly checksummed address should return checksum warning",
       result is AddressValidation.ChecksumWarning
@@ -339,7 +363,7 @@ class SendViewModelTest {
     whenever(evmSendHelper.estimateGas(any(), any(), any())).thenReturn(gasEstimate)
 
     val vm = createEvmViewModel()
-    vm.onAddressChanged("0x9858EfFD232B4033E47d90003D41EC34EcaEda94")
+    vm.onAddressChanged(recipientEthAddress)
     vm.onAmountChanged("0.5")
 
     vm.prepareSend()
@@ -455,7 +479,7 @@ class SendViewModelTest {
       .thenReturn("0xevmtxhash123")
 
     val vm = createEvmViewModel()
-    vm.onAddressChanged("0x9858EfFD232B4033E47d90003D41EC34EcaEda94")
+    vm.onAddressChanged(recipientEthAddress)
     vm.onAmountChanged("0.5")
 
     vm.prepareSend()
@@ -629,7 +653,7 @@ class SendViewModelTest {
     whenever(evmSendHelper.estimateGas(any(), any(), any())).thenReturn(null)
 
     val vm = createEvmViewModel()
-    vm.onAddressChanged("0x9858EfFD232B4033E47d90003D41EC34EcaEda94")
+    vm.onAddressChanged(recipientEthAddress)
     vm.onAmountChanged("0.5")
 
     vm.prepareSend()
@@ -685,7 +709,7 @@ class SendViewModelTest {
       .thenReturn(null)
 
     val vm = createEvmViewModel()
-    vm.onAddressChanged("0x9858EfFD232B4033E47d90003D41EC34EcaEda94")
+    vm.onAddressChanged(recipientEthAddress)
     vm.onAmountChanged("0.5")
 
     vm.prepareSend()

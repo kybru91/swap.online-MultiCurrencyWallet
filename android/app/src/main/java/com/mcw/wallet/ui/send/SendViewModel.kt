@@ -140,7 +140,7 @@ class SendViewModel(
   private val balance: BigDecimal,
   private val senderAddress: String,
   private val btcManager: BtcManager,
-  private val evmManager: EvmManager,
+  @Suppress("UNUSED_PARAMETER") evmManager: EvmManager, // kept for API consistency; EVM ops via evmSendHelper
   private val secureStorage: SecureStorage,
   private val evmSendHelper: EvmSendHelper? = null,
   private val chainId: Long = 0L,
@@ -186,6 +186,11 @@ class SendViewModel(
   fun validateAddress(address: String): AddressValidation {
     if (address.isBlank()) {
       return AddressValidation.Invalid("Address is required")
+    }
+
+    // Prevent sending to own address
+    if (address.equals(senderAddress, ignoreCase = true)) {
+      return AddressValidation.Invalid("Cannot send to your own address")
     }
 
     return if (isBtc) {
@@ -272,6 +277,8 @@ class SendViewModel(
    * @param index the index of the selected fee tier
    */
   fun selectFeeTier(index: Int) {
+    val feeCount = _uiState.value.feeOptions?.size ?: return
+    if (index < 0 || index >= feeCount) return
     _uiState.update { it.copy(selectedFeeTierIndex = index) }
   }
 

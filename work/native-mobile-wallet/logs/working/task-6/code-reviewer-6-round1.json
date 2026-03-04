@@ -1,0 +1,33 @@
+{
+  "reviewer": "code-reviewer-6",
+  "task": 6,
+  "round": 1,
+  "status": "pass_with_findings",
+  "findings": [
+    {
+      "severity": "low",
+      "file": "android/core/btc/src/main/java/com/mcw/core/btc/BtcManager.kt",
+      "line": 14,
+      "description": "Unused import: org.bitcoinj.script.ScriptBuilder",
+      "resolution": "Removed in fix commit"
+    },
+    {
+      "severity": "low",
+      "file": "android/core/btc/src/test/java/com/mcw/core/btc/BtcManagerTest.kt",
+      "line": 19,
+      "description": "Unused import: org.mockito.kotlin.verify",
+      "resolution": "Removed in fix commit"
+    },
+    {
+      "severity": "info",
+      "file": "android/core/btc/src/main/java/com/mcw/core/btc/BtcManager.kt",
+      "description": "Secondary constructor duplicates MainNetParams.get() default — acceptable for test ergonomics, Hilt does not inject NetworkParameters by default"
+    },
+    {
+      "severity": "info",
+      "file": "android/core/btc/src/main/java/com/mcw/core/btc/BtcManager.kt",
+      "description": "UTXO selection algorithm matches web wallet's btc.ts prepareUnspents() — sort ascending, try single UTXO, accumulate from smallest. Correct port."
+    }
+  ],
+  "summary": "Clean implementation. Two unused imports fixed. Algorithm correctly ports web wallet patterns. All 33 tests pass. Data classes are well-documented."
+}

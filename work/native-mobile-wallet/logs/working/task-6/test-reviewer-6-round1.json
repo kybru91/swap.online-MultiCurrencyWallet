@@ -1,0 +1,33 @@
+{
+  "reviewer": "test-reviewer-6",
+  "task": 6,
+  "round": 1,
+  "status": "pass_with_findings",
+  "findings": [
+    {
+      "severity": "low",
+      "file": "android/core/btc/src/test/java/com/mcw/core/btc/BtcManagerTest.kt",
+      "description": "testBuildTransaction_dustChangeAbsorbed only verified hex was non-empty but did not verify output count. Strengthened by deserializing tx and asserting 1 output (no change output).",
+      "resolution": "Fixed in review commit — now verifies parsedTx.outputs.size == 1"
+    },
+    {
+      "severity": "low",
+      "file": "android/core/btc/src/test/java/com/mcw/core/btc/BtcManagerTest.kt",
+      "description": "testBuildTransaction_correctInputsAndOutputs only verified hex format but not structure. Strengthened by deserializing tx and asserting 1 input, 2 outputs.",
+      "resolution": "Fixed in review commit — now verifies parsedTx.inputs.size == 1 and parsedTx.outputs.size == 2"
+    },
+    {
+      "severity": "info",
+      "description": "All 7 TDD anchors present: testFetchBalance, testUtxoSelectionSingleInput, testUtxoSelectionMultipleInputs, testUtxoSelectionInsufficientFunds, testChangeHandlingDust, testFeeCalculation, testTransactionConstruction"
+    },
+    {
+      "severity": "info",
+      "description": "Good edge case coverage: zero balance, empty UTXO list, exact match UTXO, dust threshold boundary (545 vs 546), high fee rate, minimum tx size"
+    },
+    {
+      "severity": "info",
+      "description": "33 tests total, all independent and isolated. Each test has meaningful assertions verifying actual computed values."
+    }
+  ],
+  "summary": "All TDD anchors present. Two transaction tests strengthened with structural assertions after deserialization. 33 tests pass, good edge case coverage. Test quality is strong."
+}

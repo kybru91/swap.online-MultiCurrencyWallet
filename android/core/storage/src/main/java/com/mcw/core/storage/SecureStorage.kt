@@ -207,6 +207,60 @@ class SecureStorage private constructor(
     }
   }
 
+  // --- Auth State (for lockout persistence) ---
+
+  /**
+   * Stores an integer value for authentication state (failure counters, lockout levels).
+   * Used by AuthManager for persisting lockout state across app restarts.
+   */
+  fun saveAuthInt(key: String, value: Int) {
+    prefs.edit()
+      .putInt(key, value)
+      .apply()
+  }
+
+  /**
+   * Retrieves an integer value for authentication state.
+   * @return stored value, or 0 if not set
+   */
+  fun getAuthInt(key: String): Int {
+    return try {
+      prefs.getInt(key, 0)
+    } catch (e: SecurityException) {
+      handleCorruption()
+      throw KeyStoreCorruptionException()
+    } catch (e: GeneralSecurityException) {
+      handleCorruption()
+      throw KeyStoreCorruptionException()
+    }
+  }
+
+  /**
+   * Stores a long value for authentication state (lockout timestamps).
+   * Used by AuthManager for persisting lockout expiry across app restarts.
+   */
+  fun saveAuthLong(key: String, value: Long) {
+    prefs.edit()
+      .putLong(key, value)
+      .apply()
+  }
+
+  /**
+   * Retrieves a long value for authentication state.
+   * @return stored value, or 0 if not set
+   */
+  fun getAuthLong(key: String): Long {
+    return try {
+      prefs.getLong(key, 0L)
+    } catch (e: SecurityException) {
+      handleCorruption()
+      throw KeyStoreCorruptionException()
+    } catch (e: GeneralSecurityException) {
+      handleCorruption()
+      throw KeyStoreCorruptionException()
+    }
+  }
+
   // --- Wallet State ---
 
   /**
@@ -300,8 +354,10 @@ class SecureStorage private constructor(
     /**
      * Creates a SecureStorage instance with a pre-configured SharedPreferences.
      * For unit testing only — bypasses EncryptedSharedPreferences creation.
+     * Public visibility required for cross-module test access (e.g., :core:auth tests).
      */
-    internal fun createForTesting(prefs: SharedPreferences): SecureStorage {
+    @androidx.annotation.VisibleForTesting
+    fun createForTesting(prefs: SharedPreferences): SecureStorage {
       return SecureStorage(prefs)
     }
   }

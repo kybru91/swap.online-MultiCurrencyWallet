@@ -29,6 +29,12 @@ dependencies {
   // BiometricPrompt for fingerprint/face unlock
   implementation("androidx.biometric:biometric:1.1.0")
 
+  // bcrypt for password verification
+  implementation("org.mindrot:jbcrypt:0.4")
+
+  // Coroutines
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
   // Project modules
   implementation(project(":core:storage"))
 

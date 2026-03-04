@@ -65,7 +65,10 @@
       "common/*": ["src/common/*"],
 
       "web3connect": ["src/common/web3connect"],
-      "web3connect/*": ["src/common/web3connect/*"]
+      "web3connect/*": ["src/common/web3connect/*"],
+
+      "lib": ["src/front/shared/lib"],
+      "lib/*": ["src/front/shared/lib/*"]
     }
   },
   "include": ["src/**/*", "tests"],

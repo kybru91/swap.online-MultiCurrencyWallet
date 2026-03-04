@@ -1,4 +1,5 @@
-import { PureComponent } from 'react'
+import React, { PureComponent } from 'react'
+import { useAppKitAccount } from '@reown/appkit/react'
 import { connect } from 'redaction'
 import { BigNumber } from 'bignumber.js'
 import { FormattedMessage } from 'react-intl'
@@ -226,8 +227,8 @@ class QuickSwap extends PureComponent<IUniversalObj, ComponentState> {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    const { metamaskData, availableBlockchains } = this.props
-    const { metamaskData: prevMetamaskData } = prevProps
+    const { availableBlockchains, appKitAccount } = this.props
+    const { appKitAccount: prevAppKitAccount } = prevProps
     const { wrongNetwork: prevWrongNetwork, activeSection: prevActiveSection } = prevState
     const { blockReason, currencies, spendedCurrency, activeSection, wrongNetwork: curWrongNetwork } = this.state
 
@@ -238,12 +239,12 @@ class QuickSwap extends PureComponent<IUniversalObj, ComponentState> {
       && (isSpendedCurrencyNetworkAvailable || isCurrentNetworkAvailable)
     const switchToWrongNetwork = !prevWrongNetwork && !isSpendedCurrencyNetworkAvailable
     const switchFromWrongToWrong = prevWrongNetwork && curWrongNetwork
-    const disconnect = prevMetamaskData.isConnected && !metamaskData.isConnected
+    const disconnect = prevAppKitAccount.isConnected && !appKitAccount.isConnected
 
     let needFullUpdate = (
       disconnect
       || (
-        metamaskData.isConnected
+        appKitAccount.isConnected
         && (
           (
             (
@@ -251,7 +252,7 @@ class QuickSwap extends PureComponent<IUniversalObj, ComponentState> {
               || switchToWrongNetwork
             ) && !switchFromWrongToWrong
           )
-          || prevMetamaskData.address !== metamaskData.address
+          || prevAppKitAccount.address !== appKitAccount.address
         )
       )
     )
@@ -1430,10 +1431,16 @@ class QuickSwap extends PureComponent<IUniversalObj, ComponentState> {
   }
 }
 
-export default connect(({ currencies, user, oneinch }) => ({
+const QuickSwapConnected = connect(({ currencies, user, oneinch }) => ({
   allCurrencies: currencies.items,
   tokensWallets: user.tokensData,
   activeFiat: user.activeFiat,
-  metamaskData: user.metamaskData,
   availableBlockchains: oneinch.blockchains,
 }))(CSSModules(QuickSwap, styles, { allowMultiple: true }))
+
+function QuickSwapWithAppKit(props) {
+  const appKitAccount = useAppKitAccount()
+  return <QuickSwapConnected {...props} appKitAccount={appKitAccount} />
+}
+
+export default QuickSwapWithAppKit

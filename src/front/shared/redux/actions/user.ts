@@ -162,10 +162,12 @@ const getBalances = () => {
   Object.keys(config.enabledEvmNetworks).forEach((evmType) => {
     if (!enabledCurrencies || enabledCurrencies[evmType.toLowerCase()]) {
       if ((onlyEvmWallets && metamask.isEnabled() && metamask.isConnected()) || !onlyEvmWallets) {
-        evmBalancesFuncs.push({
-          func: actions[evmType.toLowerCase()].getBalance,
-          name: evmType.toLowerCase(),
-        })
+        if (actions[evmType.toLowerCase()]?.getBalance) {
+          evmBalancesFuncs.push({
+            func: actions[evmType.toLowerCase()].getBalance,
+            name: evmType.toLowerCase(),
+          })
+        }
       }
     }
   })

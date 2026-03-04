@@ -1,0 +1,61 @@
+.chip {
+  @include ff-bold;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 6px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 20px;
+  font-size: 0.82rem;
+  color: var(--color);
+  transition: border-color 0.2s, background 0.15s;
+  white-space: nowrap;
+  user-select: none;
+
+  &:hover {
+    border-color: var(--color-brand);
+    background: var(--color-pale);
+  }
+}
+
+.chainName {
+  color: var(--color);
+  font-weight: 700;
+}
+
+.dot {
+  color: var(--color-notice);
+  font-weight: 400;
+  margin: 0 1px;
+}
+
+.address {
+  color: var(--color-brand);
+  @include ellipsis;
+  max-width: 90px;
+}
+
+.connectText {
+  color: var(--color-brand);
+}
+
+.caret {
+  font-size: 0.65rem;
+  color: var(--color-notice);
+  margin-left: 2px;
+}
+
+@include media-mobile {
+  .chainName {
+    display: none;
+  }
+
+  .dot {
+    display: none;
+  }
+
+  .chip {
+    padding: 5px 10px;
+  }
+}

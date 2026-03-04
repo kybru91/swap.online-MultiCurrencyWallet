@@ -128,7 +128,6 @@ type WithdrawModalState = {
       ghostData,
       nextData,
       activeFiat,
-      metamaskData,
     },
     ui: { dashboardModalsAllowed },
   }) => ({
@@ -152,7 +151,6 @@ type WithdrawModalState = {
       btcData,
       ghostData,
       nextData,
-      metamaskData,
     ],
     dashboardView: dashboardModalsAllowed,
   }),

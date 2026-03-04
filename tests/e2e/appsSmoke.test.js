@@ -319,7 +319,9 @@ describe('Apps nav dropdown', () => {
 })
 
 describe('App view — layout and UI', () => {
-  it('no duplicate app tabs in switch row (only Back button + app title)', async () => {
+  it('app view has no navigation bar — full-screen iframe mode', async () => {
+    // Back-button bar was removed in commit 79f157971: iframe now fills full screen.
+    // Verify: no "All apps" back button, no duplicate app-title tab buttons.
     const page = await newPage()
     try {
       await goToAppsPage(page)
@@ -330,32 +332,28 @@ describe('App view — layout and UI', () => {
       await page.goto(`${url}#/apps/${targetApp.id}`)
       await timeOut(2_000)
 
-      // Switch row should have the Back button text
-      const backBtn = await page.evaluateHandle(() => {
+      // No "All apps" back button should exist (bar was removed)
+      const hasBackBtn = await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button'))
-        return btns.find((b) => b.textContent?.includes('All apps'))
+        return !!btns.find((b) => b.textContent?.includes('All apps'))
       })
-      expect(backBtn.asElement()).not.toBeNull()
-      console.log('Back button found ✓')
+      expect(hasBackBtn).toBe(false)
+      console.log('Back button absent ✓ (full-screen mode)')
 
-      // Switch row should NOT contain other app titles as separate buttons
+      // No duplicate app-title tab buttons either
       const appTabButtons = await page.evaluate((appTitles) => {
         const btns = Array.from(document.querySelectorAll('button'))
         return appTitles.filter((title) =>
-          btns.some(
-            (b) =>
-              b.textContent?.trim() === title &&
-              !b.textContent?.includes('All apps')
-          )
+          btns.some((b) => b.textContent?.trim() === title)
         )
       }, APPS.map((a) => a.title))
 
       console.log('App tab buttons found:', appTabButtons)
       expect(appTabButtons.length).toBe(0)
 
-      await takeScreenshot(page, 'Apps_SwitchRow_NoTabs')
+      await takeScreenshot(page, 'Apps_FullScreen_NoNavBar')
     } catch (error) {
-      await takeScreenshot(page, 'Apps_SwitchRow_Error')
+      await takeScreenshot(page, 'Apps_FullScreen_Error')
       throw error
     } finally {
       await page.close()

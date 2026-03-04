@@ -33,7 +33,6 @@ import WalletAddressModal from './WalletAddressModal/WalletAddressModal'
 import AlertWindow from "./AlertWindow"
 
 import ConnectWalletModal from './ConnectWalletModal/ConnectWalletModal'
-import WalletConnectAccount from './WalletConnectAccount/WalletConnectAccount'
 
 // Shamir's Secret-Sharing for Mnemonic Codes
 import ShamirsSecretRestory from './ShamirsSecretRestory/ShamirsSecretRestory'
@@ -78,7 +77,6 @@ export default {
   AlertWindow,
 
   ConnectWalletModal,
-  WalletConnectAccount,
 
   ShamirsSecretRestory,
   ShamirsSecretSave,

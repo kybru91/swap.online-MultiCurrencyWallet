@@ -1,544 +1,409 @@
 /**
- * Unit tests for WalletConnect integration (WalletConnectProviderV2 + Web3Connect)
+ * Unit tests for wallet connection helper (metamask.ts)
  *
- * Strategy: mock @web3-react/walletconnect-v2, @web3-react/core, and external
- * config to test provider logic without real WalletConnect relay servers.
+ * Strategy: mock @wagmi/core and lib/appkit to test the helper logic
+ * without real wallet connections or relay servers.
  *
- * References:
- * - https://github.com/DePayFi/web3-mock (web3-mock patterns)
- * - https://www.npmjs.com/package/eth-testing (eth-testing patterns)
- * - https://www.callstack.com/blog/testing-expo-web3-apps-with-wagmi-and-anvil
+ * Mocking pattern: jest.mock factories must be self-contained (hoisted above
+ * variable declarations). Access mock functions via jest.requireMock().
  */
-
-// ---- Shared state for mocks ----
-
-const mockActivate = jest.fn().mockResolvedValue(undefined)
-const mockDeactivate = jest.fn()
-const mockProviderDisconnect = jest.fn().mockResolvedValue(undefined)
-
-const mockWCProvider: Record<string, any> = {
-  accounts: ['0xTestAccount0000000000000000000000000001'],
-  chainId: 1,
-  connected: true,
-  disconnect: mockProviderDisconnect,
-  enable: jest.fn().mockResolvedValue(['0xTestAccount0000000000000000000000000001']),
-  send: jest.fn(),
-  request: jest.fn(),
-}
 
 // ---- Mocks must be declared before imports (Jest hoists these) ----
 
-jest.mock('@web3-react/walletconnect-v2', () => {
-  // Build the mock class inside the factory to avoid hoisting issues
-  class _MockWalletConnectV2 {
-    provider = mockWCProvider
-    activate = mockActivate
-    deactivate = mockDeactivate
-    constructor(config: any) {
-      ;(this as any)._config = config
-    }
-  }
-  return { WalletConnect: _MockWalletConnectV2 }
-})
+jest.mock('@wagmi/core', () => ({
+  getAccount: jest.fn(),
+  watchAccount: jest.fn(() => jest.fn()),
+  getChainId: jest.fn(),
+  disconnect: jest.fn().mockResolvedValue(undefined),
+  switchChain: jest.fn().mockResolvedValue(undefined),
+}))
 
-jest.mock('@web3-react/core', () => ({
-  initializeConnector: jest.fn((factory: Function) => {
-    const actions = {
-      startActivation: jest.fn().mockReturnValue(jest.fn()),
-      update: jest.fn(),
-      resetState: jest.fn(),
-    }
-    const connector = factory(actions)
-    const hooks = {
-      useAccount: jest.fn(),
-      useChainId: jest.fn(),
-      useProvider: jest.fn(),
-    }
-    return [connector, hooks]
-  }),
+jest.mock('lib/appkit', () => ({
+  modal: {
+    open: jest.fn().mockResolvedValue(undefined),
+    subscribeState: jest.fn(),
+  },
+  wagmiConfig: {},
+  wagmiAdapter: {},
 }))
 
 jest.mock('helpers/externalConfig', () => ({
   __esModule: true,
   default: {
-    api: {
-      WalletConnectProjectId: 'test-project-id-12345',
+    api: { WalletConnectProjectId: 'test-project-id-12345' },
+    evmNetworks: {
+      ETH: { networkVersion: 1, chainName: 'Ethereum', currency: 'ETH', rpcUrls: ['https://mainnet.infura.io/v3/test'] },
+      BNB: { networkVersion: 56, chainName: 'Binance Smart Chain', currency: 'BNB', rpcUrls: ['https://bsc-dataseed.binance.org'] },
+      MATIC: { networkVersion: 137, chainName: 'Polygon', currency: 'MATIC', rpcUrls: ['https://polygon-rpc.com'] },
     },
+    evmNetworkVersions: [1, 56, 137],
+    opts: { curEnabled: null },
   },
 }))
 
-jest.mock('app-config', () => ({
+jest.mock('redux/actions', () => ({
   __esModule: true,
   default: {
-    evmNetworkVersions: [1, 56, 137],
+    user: {
+      sign: jest.fn().mockResolvedValue(undefined),
+      getBalances: jest.fn().mockResolvedValue(undefined),
+    },
+    modals: {
+      open: jest.fn(),
+      close: jest.fn(),
+    },
   },
 }))
 
-jest.mock('react-device-detect', () => ({
-  isMobile: false,
+jest.mock('helpers', () => ({
+  cacheStorageGet: jest.fn().mockReturnValue(false),
+  cacheStorageSet: jest.fn(),
+  constants: {},
 }))
 
-jest.mock('web3', () => {
-  return jest.fn().mockImplementation(() => ({
-    eth: {
-      getAccounts: jest.fn().mockResolvedValue(['0xTestAccount0000000000000000000000000001']),
-    },
-    isMetamask: false,
-  }))
-})
+jest.mock('swap.app', () => ({
+  __esModule: true,
+  default: { services: {} },
+}))
+
+jest.mock('helpers/web3', () => ({
+  setMetamask: jest.fn(),
+  setProvider: jest.fn(),
+  setDefaultProvider: jest.fn(),
+  getWeb3: jest.fn(),
+}))
+
+jest.mock('web3', () => jest.fn().mockImplementation(() => ({
+  eth: { getAccounts: jest.fn().mockResolvedValue(['0xTestAccount0000000000000000000000000001']) },
+})))
+
+jest.mock('common/coins/getCoinInfo', () => ({
+  __esModule: true,
+  default: jest.fn((currency: string) => ({ blockchain: currency.toUpperCase() })),
+}))
+
+jest.mock('swap.app/constants/COINS', () => ({
+  COIN_DATA: {
+    BTC: { model: 'UTXO' },
+    ETH: { model: 'AB' },
+  },
+  COIN_MODEL: { UTXO: 'UTXO', AB: 'AB' },
+}))
 
 // ---- Imports (after mocks) ----
-import WalletConnectProviderV2 from 'web3connect/providers/WalletConnectProviderV2'
-import SUPPORTED_PROVIDERS from 'web3connect/providers/supported'
 
-describe('WalletConnectProviderV2', () => {
-  let provider: WalletConnectProviderV2
+import metamask from 'helpers/metamask'
 
-  const mockWeb3Connect = {
-    _web3RPC: { 1: 'https://mainnet.infura.io/v3/test' },
-    _web3ChainId: 1,
+// ---- Helpers ----
+
+const connectedAccount = {
+  address: '0xTestAccount0000000000000000000000000001' as `0x${string}`,
+  isConnected: true,
+  chainId: 1,
+  connector: { name: 'MetaMask', id: 'metaMask', type: 'injected' },
+  status: 'connected' as const,
+}
+
+const disconnectedAccount = {
+  address: undefined,
+  isConnected: false,
+  chainId: undefined,
+  connector: undefined,
+  status: 'disconnected' as const,
+}
+
+function getWagmiMocks() {
+  const wagmiCore = jest.requireMock('@wagmi/core')
+  return {
+    getAccount: wagmiCore.getAccount as jest.Mock,
+    watchAccount: wagmiCore.watchAccount as jest.Mock,
+    getChainId: wagmiCore.getChainId as jest.Mock,
+    disconnect: wagmiCore.disconnect as jest.Mock,
+    switchChain: wagmiCore.switchChain as jest.Mock,
   }
+}
 
-  const defaultOptions = {
-    rpc: { 1: 'https://mainnet.infura.io/v3/test' },
-    chainId: 1,
-    bridge: 'https://bridge.walletconnect.org',
-    qrcode: true,
-    pollingInterval: 12000,
+function getAppKitMocks() {
+  const lib = jest.requireMock('lib/appkit')
+  return {
+    modalOpen: lib.modal.open as jest.Mock,
+    modalSubscribeState: lib.modal.subscribeState as jest.Mock,
   }
+}
 
+// ---- Tests ----
+
+describe('metamask.ts — isConnected', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockActivate.mockResolvedValue(undefined)
-    mockProviderDisconnect.mockResolvedValue(undefined)
-    mockWCProvider.connected = true
-    mockWCProvider.accounts = ['0xTestAccount0000000000000000000000000001']
-    mockWCProvider.chainId = 1
-
-    provider = new WalletConnectProviderV2(mockWeb3Connect, defaultOptions)
+    const m = getWagmiMocks()
+    m.getAccount.mockReturnValue({ ...connectedAccount })
+    m.getChainId.mockReturnValue(1)
+    m.watchAccount.mockReturnValue(jest.fn())
   })
 
-  describe('constructor', () => {
-    it('stores web3Connect reference', () => {
-      expect(provider._web3Connect).toBe(mockWeb3Connect)
-    })
-
-    it('exposes instance on window.testWC for debugging', () => {
-      expect((window as any).testWC).toBe(provider)
-    })
-
-    it('initializes with _inited = false', () => {
-      expect((provider as any)._inited).toBe(false)
-    })
+  it('returns true when wagmi account is connected', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...connectedAccount, isConnected: true })
+    expect(metamask.isConnected()).toBe(true)
   })
 
-  describe('initProvider', () => {
-    it('activates the connector with given chainId', async () => {
-      await provider.initProvider()
-
-      expect(mockActivate).toHaveBeenCalledWith(1)
-    })
-
-    it('sets _inited to true on success', async () => {
-      await provider.initProvider()
-
-      expect((provider as any)._inited).toBe(true)
-    })
-
-    it('does not throw on activation failure, logs to console', async () => {
-      mockActivate.mockRejectedValueOnce(new Error('Connection refused'))
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-
-      await provider.initProvider()
-
-      expect(consoleSpy).toHaveBeenCalledWith('>>> fail init - reset')
-      expect((provider as any)._inited).toBe(false)
-
-      consoleSpy.mockRestore()
-    })
-  })
-
-  describe('getAccount', () => {
-    it('returns first account from provider', () => {
-      expect(provider.getAccount()).toBe('0xTestAccount0000000000000000000000000001')
-    })
-
-    it('returns "Not connected" when provider is null', () => {
-      ;(provider as any)._walletConnectV2 = { provider: null }
-
-      expect(provider.getAccount()).toBe('Not connected')
-    })
-
-    it('returns "Not connected" when _walletConnectV2 is falsy', () => {
-      ;(provider as any)._walletConnectV2 = null
-
-      expect(provider.getAccount()).toBe('Not connected')
-    })
-  })
-
-  describe('getChainId', () => {
-    it('returns chainId from provider', () => {
-      expect(provider.getChainId()).toBe(1)
-    })
-
-    it('returns 0 when provider is null', () => {
-      ;(provider as any)._walletConnectV2 = { provider: null }
-
-      expect(provider.getChainId()).toBe(0)
-    })
-
-    it('returns 0 when _walletConnectV2 is falsy', () => {
-      ;(provider as any)._walletConnectV2 = null
-
-      expect(provider.getChainId()).toBe(0)
-    })
-  })
-
-  describe('getProvider', () => {
-    it('returns the underlying WalletConnect provider', () => {
-      expect(provider.getProvider()).toBe(mockWCProvider)
-    })
-  })
-
-  describe('isConnected', () => {
-    it('returns true when provider is connected', async () => {
-      mockWCProvider.connected = true
-
-      const result = await provider.isConnected()
-      expect(result).toBeTruthy()
-    })
-
-    it('returns falsy when provider.connected is false', async () => {
-      mockWCProvider.connected = false
-
-      const result = await provider.isConnected()
-      expect(result).toBeFalsy()
-    })
-
-    it('returns falsy when provider is null', async () => {
-      ;(provider as any)._walletConnectV2 = { provider: null }
-
-      const result = await provider.isConnected()
-      expect(result).toBeFalsy()
-    })
-  })
-
-  describe('isLocked', () => {
-    it('always returns false', () => {
-      expect(provider.isLocked()).toBe(false)
-    })
-  })
-
-  describe('Connect', () => {
-    it('returns false when not initialized', async () => {
-      const result = await provider.Connect()
-
-      expect(result).toBe(false)
-      expect(mockActivate).not.toHaveBeenCalled()
-    })
-
-    it('activates and returns true when connected', async () => {
-      await provider.initProvider()
-      mockActivate.mockClear()
-
-      const result = await provider.Connect()
-
-      expect(mockActivate).toHaveBeenCalledWith(1)
-      expect(result).toBe(true)
-    })
-
-    it('returns false when activation throws (user cancels)', async () => {
-      await provider.initProvider()
-      mockActivate.mockClear()
-      mockActivate.mockRejectedValueOnce(new Error('User rejected'))
-
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-      const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation()
-
-      const result = await provider.Connect()
-
-      expect(result).toBe(false)
-      expect(consoleSpy).toHaveBeenCalledWith('>>> WC - Fail connect')
-
-      consoleSpy.mockRestore()
-      consoleErrSpy.mockRestore()
-    })
-
-    it('returns false when not connected after activation', async () => {
-      await provider.initProvider()
-      mockActivate.mockClear()
-      mockWCProvider.connected = false
-
-      const result = await provider.Connect()
-
-      expect(result).toBe(false)
-    })
-  })
-
-  describe('Disconnect', () => {
-    it('calls provider.disconnect()', async () => {
-      await provider.Disconnect()
-
-      expect(mockProviderDisconnect).toHaveBeenCalled()
-    })
-
-    it('does not throw when provider is null', async () => {
-      ;(provider as any)._walletConnectV2 = { provider: null }
-
-      await expect(provider.Disconnect()).resolves.not.toThrow()
-    })
-
-    it('does not throw when _walletConnectV2 is null', async () => {
-      ;(provider as any)._walletConnectV2 = null
-
-      await expect(provider.Disconnect()).resolves.not.toThrow()
-    })
-  })
-
-  describe('on (event listener stub)', () => {
-    it('does not throw when called', () => {
-      expect(() => provider.on('connect', jest.fn())).not.toThrow()
-    })
+  it('returns false when wagmi account is disconnected', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...disconnectedAccount })
+    expect(metamask.isConnected()).toBe(false)
   })
 })
 
-describe('WalletConnect multi-chain support', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    mockActivate.mockResolvedValue(undefined)
-    mockWCProvider.connected = true
+describe('metamask.ts — getAddress', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('returns address when connected', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...connectedAccount })
+    expect(metamask.getAddress()).toBe('0xTestAccount0000000000000000000000000001')
   })
 
+  it('returns empty string when not connected', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...disconnectedAccount })
+    expect(metamask.getAddress()).toBe('')
+  })
+})
+
+describe('metamask.ts — getChainId', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('returns current chain ID', () => {
+    getWagmiMocks().getChainId.mockReturnValueOnce(1)
+    expect(metamask.getChainId()).toBe(1)
+  })
+
+  it('returns 56 for BSC chain', () => {
+    getWagmiMocks().getChainId.mockReturnValueOnce(56)
+    expect(metamask.getChainId()).toBe(56)
+  })
+})
+
+describe('metamask.ts — isAvailableNetwork', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('returns true for Ethereum mainnet (chainId 1)', () => {
+    getWagmiMocks().getChainId.mockReturnValue(1)
+    expect(metamask.isAvailableNetwork()).toBe(true)
+  })
+
+  it('returns true for BSC (chainId 56)', () => {
+    getWagmiMocks().getChainId.mockReturnValue(56)
+    expect(metamask.isAvailableNetwork()).toBe(true)
+  })
+
+  it('returns true for Polygon (chainId 137)', () => {
+    getWagmiMocks().getChainId.mockReturnValue(137)
+    expect(metamask.isAvailableNetwork()).toBe(true)
+  })
+
+  it('returns false for unknown chain (chainId 999)', () => {
+    getWagmiMocks().getChainId.mockReturnValue(999)
+    expect(metamask.isAvailableNetwork()).toBe(false)
+  })
+})
+
+describe('metamask.ts — switchNetwork', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('calls switchChain with correct chainId for ETH', async () => {
+    const result = await metamask.switchNetwork('ETH')
+    expect(getWagmiMocks().switchChain).toHaveBeenCalledWith({}, { chainId: 1 })
+    expect(result).toBe(true)
+  })
+
+  it('calls switchChain with correct chainId for BNB', async () => {
+    const result = await metamask.switchNetwork('BNB')
+    expect(getWagmiMocks().switchChain).toHaveBeenCalledWith({}, { chainId: 56 })
+    expect(result).toBe(true)
+  })
+
+  it('returns false for unknown currency', async () => {
+    const result = await metamask.switchNetwork('UNKNOWN_CHAIN')
+    expect(getWagmiMocks().switchChain).not.toHaveBeenCalled()
+    expect(result).toBe(false)
+  })
+
+  it('returns false and logs error when switchChain throws', async () => {
+    getWagmiMocks().switchChain.mockRejectedValueOnce(new Error('User rejected network switch'))
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation()
+
+    const result = await metamask.switchNetwork('ETH')
+
+    expect(result).toBe(false)
+    expect(consoleSpy).toHaveBeenCalledWith('switchNetwork error:', expect.any(Error))
+    consoleSpy.mockRestore()
+  })
+})
+
+describe('metamask.ts — connect', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('opens AppKit modal', async () => {
+    // watchAccount immediately triggers connection
+    getWagmiMocks().watchAccount.mockImplementationOnce((_: any, { onChange }: any) => {
+      setTimeout(() => onChange({ ...connectedAccount }), 0)
+      return jest.fn()
+    })
+    getAppKitMocks().modalSubscribeState.mockImplementation(() => {})
+
+    const result = await metamask.connect()
+
+    expect(getAppKitMocks().modalOpen).toHaveBeenCalled()
+    expect(result).toBe(true)
+  })
+
+  it('resolves false when modal closes without connection', async () => {
+    getWagmiMocks().watchAccount.mockImplementationOnce(() => jest.fn())
+    getWagmiMocks().getAccount.mockReturnValue({ ...disconnectedAccount })
+
+    // Simulate modal closing with no connection
+    getAppKitMocks().modalSubscribeState.mockImplementationOnce((cb: Function) => {
+      setTimeout(() => cb({ open: false }), 0)
+    })
+
+    const result = await metamask.connect()
+    expect(result).toBe(false)
+  })
+})
+
+describe('metamask.ts — disconnect', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('calls wagmi disconnect when connected', async () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...connectedAccount, isConnected: true })
+
+    await metamask.disconnect()
+
+    expect(getWagmiMocks().disconnect).toHaveBeenCalled()
+  })
+
+  it('does not call disconnect when already disconnected', async () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...disconnectedAccount })
+
+    await metamask.disconnect()
+
+    expect(getWagmiMocks().disconnect).not.toHaveBeenCalled()
+  })
+})
+
+describe('metamask.ts — isEnabled', () => {
+  it('always returns true', () => {
+    expect(metamask.isEnabled()).toBe(true)
+  })
+})
+
+describe('metamask.ts — web3connect compat stubs', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('getInjectedType returns METAMASK when connected', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...connectedAccount, isConnected: true })
+    expect(metamask.web3connect.getInjectedType()).toBe('METAMASK')
+  })
+
+  it('getInjectedType returns NONE when not connected', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...disconnectedAccount })
+    expect(metamask.web3connect.getInjectedType()).toBe('NONE')
+  })
+
+  it('getInjectedTitle returns "Browser Wallet"', () => {
+    expect(metamask.web3connect.getInjectedTitle()).toBe('Browser Wallet')
+  })
+
+  it('isConnected mirrors wagmi state — true', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...connectedAccount, isConnected: true })
+    expect(metamask.web3connect.isConnected()).toBe(true)
+  })
+
+  it('isConnected mirrors wagmi state — false', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...disconnectedAccount })
+    expect(metamask.web3connect.isConnected()).toBe(false)
+  })
+
+  it('getProviderType returns connector name', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({
+      ...connectedAccount,
+      connector: { name: 'MetaMask', id: 'metaMask', type: 'injected' },
+    })
+    expect(metamask.web3connect.getProviderType()).toBe('MetaMask')
+  })
+
+  it('getProviderType returns "Unknown" when no connector', () => {
+    getWagmiMocks().getAccount.mockReturnValueOnce({ ...disconnectedAccount, connector: undefined })
+    expect(metamask.web3connect.getProviderType()).toBe('Unknown')
+  })
+
+  it('getChainId returns hex chain id', () => {
+    getWagmiMocks().getChainId.mockReturnValueOnce(1)
+    expect(metamask.web3connect.getChainId()).toBe('0x1')
+  })
+
+  it('isCorrectNetwork delegates to isAvailableNetwork — true', () => {
+    getWagmiMocks().getChainId.mockReturnValue(1)
+    expect(metamask.web3connect.isCorrectNetwork()).toBe(true)
+  })
+
+  it('isCorrectNetwork delegates to isAvailableNetwork — false', () => {
+    getWagmiMocks().getChainId.mockReturnValue(9999)
+    expect(metamask.web3connect.isCorrectNetwork()).toBe(false)
+  })
+})
+
+describe('metamask.ts — multi-chain support', () => {
+  beforeEach(() => jest.clearAllMocks())
+
   it('supports Ethereum mainnet (chainId 1)', () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-    expect(provider).toBeDefined()
-    expect(provider.getChainId()).toBe(1)
+    getWagmiMocks().getChainId.mockReturnValue(1)
+    expect(metamask.isAvailableNetwork()).toBe(true)
   })
 
   it('supports BSC (chainId 56)', () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 56: 'https://bsc-dataseed.binance.org' }, _web3ChainId: 56 },
-      { chainId: 56 }
-    )
-    expect(provider).toBeDefined()
+    getWagmiMocks().getChainId.mockReturnValue(56)
+    expect(metamask.isAvailableNetwork()).toBe(true)
   })
 
   it('supports Polygon (chainId 137)', () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 137: 'https://polygon-rpc.com' }, _web3ChainId: 137 },
-      { chainId: 137 }
-    )
-    expect(provider).toBeDefined()
+    getWagmiMocks().getChainId.mockReturnValue(137)
+    expect(metamask.isAvailableNetwork()).toBe(true)
+  })
+
+  it('rejects unsupported networks (chainId 42161 not in test config)', () => {
+    getWagmiMocks().getChainId.mockReturnValue(42161)
+    expect(metamask.isAvailableNetwork()).toBe(false)
   })
 })
 
-describe('SUPPORTED_PROVIDERS', () => {
-  it('has INJECTED provider', () => {
-    expect(SUPPORTED_PROVIDERS.INJECTED).toBe('INJECTED')
-  })
+describe('metamask.ts — full connect/disconnect lifecycle', () => {
+  beforeEach(() => jest.clearAllMocks())
 
-  it('has WALLETCONNECT provider', () => {
-    expect(SUPPORTED_PROVIDERS.WALLETCONNECT).toBe('WALLETCONNECT')
-  })
-})
+  it('connect → get data → disconnect', async () => {
+    const { getAccount, watchAccount, getChainId, disconnect } = getWagmiMocks()
+    const { modalOpen, modalSubscribeState } = getAppKitMocks()
 
-describe('WalletConnect full lifecycle', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    mockActivate.mockResolvedValue(undefined)
-    mockProviderDisconnect.mockResolvedValue(undefined)
-    mockWCProvider.connected = true
-    mockWCProvider.accounts = ['0xTestAccount0000000000000000000000000001']
-    mockWCProvider.chainId = 1
-  })
+    // Setup: immediate connection on watchAccount
+    watchAccount.mockImplementationOnce((_: any, { onChange }: any) => {
+      setTimeout(() => onChange({ ...connectedAccount }), 0)
+      return jest.fn()
+    })
+    modalSubscribeState.mockImplementation(() => {})
+    getAccount.mockReturnValue({ ...connectedAccount })
+    getChainId.mockReturnValue(1)
 
-  it('init → connect → get data → disconnect', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    // 1. Init
-    await provider.initProvider()
-    expect((provider as any)._inited).toBe(true)
-
-    // 2. Connect
-    mockActivate.mockClear()
-    const connected = await provider.Connect()
+    // 1. Connect
+    const connected = await metamask.connect()
     expect(connected).toBe(true)
+    expect(modalOpen).toHaveBeenCalled()
 
-    // 3. Get data
-    expect(provider.getAccount()).toBe('0xTestAccount0000000000000000000000000001')
-    expect(provider.getChainId()).toBe(1)
-    expect(provider.getProvider()).toBe(mockWCProvider)
-    expect(await provider.isConnected()).toBeTruthy()
-    expect(provider.isLocked()).toBe(false)
+    // 2. Get data
+    expect(metamask.isConnected()).toBe(true)
+    expect(metamask.getAddress()).toBe('0xTestAccount0000000000000000000000000001')
+    expect(metamask.getChainId()).toBe(1)
+    expect(metamask.isAvailableNetwork()).toBe(true)
 
-    // 4. Disconnect
-    await provider.Disconnect()
-    expect(mockProviderDisconnect).toHaveBeenCalled()
-  })
-
-  it('handles reconnection after disconnect', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    await provider.initProvider()
-
-    // Connect
-    mockActivate.mockClear()
-    let connected = await provider.Connect()
-    expect(connected).toBe(true)
-
-    // Disconnect
-    await provider.Disconnect()
-
-    // Reconnect
-    mockActivate.mockClear()
-    mockWCProvider.connected = true
-    connected = await provider.Connect()
-    expect(connected).toBe(true)
-    expect(mockActivate).toHaveBeenCalledWith(1)
-  })
-
-  it('handles chain switching scenario', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    await provider.initProvider()
-    await provider.Connect()
-
-    // Simulate chain change (user switches to BSC in wallet)
-    mockWCProvider.chainId = 56
-    expect(provider.getChainId()).toBe(56)
-
-    // Switch back
-    mockWCProvider.chainId = 1
-    expect(provider.getChainId()).toBe(1)
-  })
-
-  it('handles account change scenario', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    await provider.initProvider()
-    await provider.Connect()
-
-    expect(provider.getAccount()).toBe('0xTestAccount0000000000000000000000000001')
-
-    // Simulate account change
-    mockWCProvider.accounts = ['0xNewAccount00000000000000000000000000002']
-    expect(provider.getAccount()).toBe('0xNewAccount00000000000000000000000000002')
-  })
-})
-
-describe('WalletConnect error scenarios', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    mockActivate.mockResolvedValue(undefined)
-    mockProviderDisconnect.mockResolvedValue(undefined)
-    mockWCProvider.connected = true
-    mockWCProvider.accounts = ['0xTestAccount0000000000000000000000000001']
-    mockWCProvider.chainId = 1
-  })
-
-  it('handles relay server timeout during init', async () => {
-    mockActivate.mockRejectedValueOnce(new Error('WebSocket connection timeout'))
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    await provider.initProvider()
-
-    // Should not be inited
-    expect((provider as any)._inited).toBe(false)
-    // Connect should return false since not inited
-    const result = await provider.Connect()
-    expect(result).toBe(false)
-
-    consoleSpy.mockRestore()
-  })
-
-  it('handles provider becoming unavailable mid-session', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    await provider.initProvider()
-    await provider.Connect()
-
-    // Simulate provider becoming null (session expired)
-    ;(provider as any)._walletConnectV2.provider = null
-
-    expect(provider.getAccount()).toBe('Not connected')
-    expect(provider.getChainId()).toBe(0)
-    expect(await provider.isConnected()).toBeFalsy()
-  })
-
-  it('handles disconnect when already disconnected', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    ;(provider as any)._walletConnectV2 = null
-
-    await expect(provider.Disconnect()).resolves.not.toThrow()
-  })
-
-  it('handles UserRejectedRequestError (code 4001) during Connect', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    await provider.initProvider()
-    mockActivate.mockClear()
-
-    const userRejectError = new Error('User rejected the request')
-    ;(userRejectError as any).code = 4001
-    mockActivate.mockRejectedValueOnce(userRejectError)
-
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-    const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation()
-
-    const result = await provider.Connect()
-    expect(result).toBe(false)
-
-    consoleSpy.mockRestore()
-    consoleErrSpy.mockRestore()
-  })
-
-  it('handles network error during activation', async () => {
-    const provider = new WalletConnectProviderV2(
-      { _web3RPC: { 1: 'https://mainnet.infura.io' }, _web3ChainId: 1 },
-      { chainId: 1 }
-    )
-
-    await provider.initProvider()
-    mockActivate.mockClear()
-    mockActivate.mockRejectedValueOnce(new Error('Network error'))
-
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-    const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation()
-
-    const result = await provider.Connect()
-    expect(result).toBe(false)
-
-    consoleSpy.mockRestore()
-    consoleErrSpy.mockRestore()
+    // 3. Disconnect
+    await metamask.disconnect()
+    expect(disconnect).toHaveBeenCalled()
   })
 })

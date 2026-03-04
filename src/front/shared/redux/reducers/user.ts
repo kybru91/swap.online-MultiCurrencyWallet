@@ -194,7 +194,7 @@ export const initialState = {
   activeCurrency: 'BTC',
   multisigStatus: {},
   multisigPendingCount: 0,
-  metamaskData: false,
+  // metamaskData removed — wallet state now comes from Reown AppKit / wagmi hooks
 }
 
 export const updateMultisigStatus = (state, { address, last, total }) => {

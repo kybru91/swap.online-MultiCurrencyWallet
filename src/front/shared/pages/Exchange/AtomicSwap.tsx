@@ -29,6 +29,8 @@ import helpers, {
   feedback,
   links,
 } from 'helpers'
+import { getAccount, watchAccount } from '@wagmi/core'
+import { wagmiConfig } from 'lib/appkit'
 
 import Switching from 'components/controls/Switching/Switching'
 import AddressSelect from './AddressSelect/AddressSelect'
@@ -157,6 +159,7 @@ class Exchange extends PureComponent<ExchangeProps, ExchangeState> {
   promoContainer: Element
   fiatRates: { [key: string]: number }
   onRequestAnswer: (newOrder: IUniversalObj, isAccepted: boolean) => void
+  private _unwatchAccount: (() => void) | null = null
 
   static getDerivedStateFromProps(props, state) {
     const { orders } = props
@@ -459,7 +462,9 @@ class Exchange extends PureComponent<ExchangeProps, ExchangeState> {
       this.updateTokenAllowance()
     }
 
-    metamask.web3connect.on('updated', this.fetchPairFeesAndBalances)
+    this._unwatchAccount = watchAccount(wagmiConfig, {
+      onChange: () => this.fetchPairFeesAndBalances(),
+    })
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -621,7 +626,10 @@ class Exchange extends PureComponent<ExchangeProps, ExchangeState> {
     this._mounted = false
     this.timer = false
 
-    metamask.web3connect.off('updated', this.fetchPairFeesAndBalances)
+    if (this._unwatchAccount) {
+      this._unwatchAccount()
+      this._unwatchAccount = null
+    }
   }
 
   updateExchangeSettings = () => {
@@ -1895,7 +1903,7 @@ class Exchange extends PureComponent<ExchangeProps, ExchangeState> {
 
     // when Add EIP-3326: wallet_switchEthereumChain remove this
     const isEthNativeCoin = [sellNativeCurrency, buyNativeCurrency].includes('ETH')
-    const isMetamaskProvider = metamask.web3connect.getProviderTitle() === 'MetaMask'
+    const isMetamaskProvider = (getAccount(wagmiConfig).connector?.name ?? '') === 'MetaMask'
 
     const Form = (
       <div styleName="section">

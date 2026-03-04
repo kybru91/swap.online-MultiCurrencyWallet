@@ -155,7 +155,7 @@ const getConnectedWeb3Provider = (): Eip1193Provider | null => {
       return null
     }
 
-    const connectedWeb3 = metamask.getWeb3?.()
+    const connectedWeb3 = metamask.getWeb3?.() as any
     return asEip1193Provider(connectedWeb3?.currentProvider)
   } catch (error) {
     return null

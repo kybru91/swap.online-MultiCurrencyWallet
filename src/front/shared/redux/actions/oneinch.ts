@@ -60,7 +60,7 @@ const getWeb3Connector = (baseCurrency, owner) => {
     const privateKey = actions[baseCurrency].getPrivateKeyByAddress(owner)
 
     web3 = actions[baseCurrency].getCurrentWeb3()
-    connector = new PrivateKeyProviderConnector(privateKey.replace('0x', ''), web3)
+    connector = new PrivateKeyProviderConnector(privateKey.replace('0x', ''), web3 as any)
   } else {
     connector = new Web3ProviderConnector(web3)
   }

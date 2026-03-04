@@ -10,6 +10,8 @@ import config from 'helpers/externalConfig'
 import { BigNumber } from 'bignumber.js'
 
 import metamask from 'helpers/metamask'
+import { getAccount, getChainId } from '@wagmi/core'
+import { wagmiConfig } from 'lib/appkit'
 import { AddressType } from 'domain/address'
 
 import TOKEN_STANDARDS from 'helpers/constants/TOKEN_STANDARDS'
@@ -480,7 +482,6 @@ const getWallets = (options: IUniversalObj = {}) => {
       phpxData,
       ameData,
       tokensData,
-      metamaskData,
     },
   } = getState()
 
@@ -490,6 +491,7 @@ const getWallets = (options: IUniversalObj = {}) => {
 
   if (onlyEvmWallets && !metamaskConnected) return []
 
+  const currentChainId = getChainId(wagmiConfig)
   const tokenWallets = Object.keys(tokensData).map((k) => {
     const { coin, blockchain } = getCoinInfo(k)
 
@@ -498,12 +500,17 @@ const getWallets = (options: IUniversalObj = {}) => {
     if (metamaskConnected) {
       return (
         coin && blockchain !== `` &&
-          (metamaskData?.networkVersion === config.evmNetworks[blockchain].networkVersion) ?
+          (currentChainId === config.evmNetworks[blockchain].networkVersion) ?
             tokensData[k] : false
           )
     }
     return (coin && blockchain !== ``) ? tokensData[k] : false
   }).filter((d) => d !== false && d.currency !== undefined)
+
+  const appKitAccount = getAccount(wagmiConfig)
+  const connectedWalletData = metamaskConnected && appKitAccount.address
+    ? { address: appKitAccount.address, isMetamask: true, isConnected: true, currency: 'ETH' }
+    : null
 
   const allData = [
     ...(
@@ -522,8 +529,8 @@ const getWallets = (options: IUniversalObj = {}) => {
       || enabledCurrencies.fkw
       || enabledCurrencies.phpx
       || enabledCurrencies.ame
-        ? metamaskData
-          ? [metamaskData]
+        ? connectedWalletData
+          ? [connectedWalletData]
           : []
         : []
     ),

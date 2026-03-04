@@ -14,6 +14,8 @@ import PleaseDontLeaveWrapper from './PleaseDontLeaveWrapper'
 import { constants, links, ethToken } from 'helpers'
 import { localisedUrl } from 'helpers/locale'
 import metamask from 'helpers/metamask'
+import { getAccount } from '@wagmi/core'
+import { wagmiConfig } from 'lib/appkit'
 
 type ComponentProps = {
   flow: IUniversalObj
@@ -484,7 +486,7 @@ class SwapProgress extends Component<ComponentProps, ComponentState> {
                     id="Swap_MetamaskAttention"
                     defaultMessage="Please confirm the transaction in your &quot;{walletName}&quot; wallet"
                     values={{
-                      walletName: metamask.web3connect.getProviderTitle(),
+                      walletName: getAccount(wagmiConfig).connector?.name ?? 'Wallet',
                     }}
                   />
                 </strong>

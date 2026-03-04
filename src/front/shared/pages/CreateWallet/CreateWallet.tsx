@@ -12,6 +12,7 @@ import reducers from 'redux/core/reducers'
 import TOKEN_STANDARDS, { EXISTING_STANDARDS } from 'helpers/constants/TOKEN_STANDARDS'
 import links from 'helpers/links'
 import metamask from 'helpers/metamask'
+import { useAppKitAccount } from '@reown/appkit/react'
 import { localisedUrl } from 'helpers/locale'
 
 import Tooltip from 'components/ui/Tooltip/Tooltip'
@@ -37,6 +38,7 @@ function CreateWallet(props) {
   } = props
 
   const { locale } = useIntl()
+  const { isConnected: isWalletConnected } = useAppKitAccount()
 
   const forcedCurrency = pathname.split('/')[2]
 
@@ -249,7 +251,7 @@ function CreateWallet(props) {
   const web3Type = metamask.web3connect.getInjectedType()
   const web3Icon = (web3Icons[web3Type] && web3Type !== `UNKNOWN` && web3Type !== `NONE`) ? web3Icons[web3Type] : false
 
-  const hasExternalWallet = (web3Type == 'NONE' && config.opts.hasWalletConnect) || (web3Type !== 'NONE')
+  const hasExternalWallet = config.opts.hasWalletConnect || isWalletConnected
 
   return (
     <div styleName="wrapper">
@@ -318,7 +320,7 @@ function CreateWallet(props) {
           )}
           {hasExternalWallet && (
             <>
-              {!metamask.isConnected() && (
+              {!isWalletConnected && (
                 <div>
                   <button onClick={handleConnectWallet} type="button">
                     {web3Icon && (

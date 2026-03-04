@@ -250,6 +250,11 @@ jobs:
               ln -s "$PLUGIN_DIR" "$SYMLINK"
             fi
 
+            # Clear load-app.php cache (stale cached app.js from previous versions)
+            UPLOADS_DIR="/home/walletwpmixnet/web/wallet.wpmix.net/public_html/wp-content/uploads"
+            rm -f "$UPLOADS_DIR"/swap-wallet-app-*.js
+            echo "load-app.php cache cleared"
+
             echo "wallet.wpmix.net plugin updated to ${{ env.VERSION }}:"
             grep "MCWALLET_VER\|Version:" "$PLUGIN_DIR/multi-currency-wallet-pro.php" | head -3
 

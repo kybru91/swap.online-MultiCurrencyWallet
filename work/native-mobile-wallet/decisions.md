@@ -129,6 +129,25 @@
 - `./gradlew assembleDebug` -> BUILD SUCCESSFUL
 - All 7 TDD anchors pass: failover switches endpoint, 500ms queuing verified, health tracking works, HTTPS allowed, HTTP rejected, private IP rejected, localhost rejected
 
+## Task 6: BTC Operations (Balance + Transactions)
+
+**Status:** Done
+**Commit:** ab7b792a2, cd67eab03
+**Agent:** btc-engineer
+**Summary:** Implemented BtcManager in :core:btc with full BTC transaction lifecycle: balance fetching (Bitpay API, satoshis-to-BTC BigDecimal conversion), UTXO selection (ported from web's btc.ts prepareUnspents: sort ascending, try single UTXO, accumulate from smallest), fee estimation (Blockcypher API with default rate fallback from DEFAULT_CURRENCY_PARAMETERS), P2PKH transaction construction and signing (bitcoinj Transaction class), dust change absorption (change < 546 sat added to fee), and broadcast (Bitpay POST /tx/send). All constants (DUST_SAT=546, P2PKH_IN_SIZE=148, P2PKH_OUT_SIZE=34, TX_SIZE=15) match web wallet's TRANSACTION.ts.
+**Deviations:** None. Algorithm, constants, and API endpoints match web wallet implementation exactly.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer-6: 2 low findings (unused imports, fixed) + 2 info -> [logs/working/task-6/code-reviewer-6-round1.json]
+- security-auditor-6: OK (4 info, no vulnerabilities) -> [logs/working/task-6/security-auditor-6-round1.json]
+- test-reviewer-6: 2 low findings (tx tests strengthened with deserialization assertions, fixed) + 3 info -> [logs/working/task-6/test-reviewer-6-round1.json]
+
+**Verification:**
+- `./gradlew :core:btc:test` -> BUILD SUCCESSFUL, 33 tests passed (debug + release, 0 failures)
+- All 7 TDD anchors pass: fetchBalance, utxoSelectionSingleInput, utxoSelectionMultipleInputs, utxoSelectionInsufficientFunds, changeHandlingDust, feeCalculation, transactionConstruction
+
 ## Task 7: EVM Operations — Balance, ERC20, Gas, Broadcast
 
 **Status:** Done

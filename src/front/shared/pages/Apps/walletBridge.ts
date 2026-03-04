@@ -185,19 +185,28 @@ export const createWalletAppsBridge = ({
     targetOrigin = ''
   }
 
-  // Create virtual EIP-1193 provider for internal MCW wallet
+  // Create virtual EIP-1193 provider for MCW wallet
+  // Priority: external wallet (MetaMask) address if connected, otherwise internal MCW address
   const createInternalProvider = (): Eip1193Provider | null => {
     if (!internalWallet?.address) {
       return null
     }
 
+    const getActiveAddress = (): string => {
+      if (metamask?.isConnected?.()) {
+        const externalAddress = metamask.getAddress?.()
+        if (externalAddress) return externalAddress
+      }
+      return internalWallet.address
+    }
+
     return {
       request: async ({ method, params }) => {
         if (method === 'eth_accounts') {
-          return [internalWallet.address]
+          return [getActiveAddress()]
         }
         if (method === 'eth_requestAccounts') {
-          return [internalWallet.address]
+          return [getActiveAddress()]
         }
         // Forward all other methods (eth_call, eth_chainId, eth_getBalance, etc.)
         // to the external EIP-1193 provider (e.g. MetaMask/window.ethereum)

@@ -1,0 +1,55 @@
+name: RPC Health Check
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check EVM RPC Endpoints
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all RPC endpoints
+        run: |
+          INFURA_KEY="fdd4494101ed4a28b41bb66d7fe9c692"
+          PAYLOAD='{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+          FAILED=0
+
+          check_rpc() {
+            local name="$1"
+            local url="$2"
+            local resp
+            resp=$(curl -sf --max-time 10 -X POST "$url" \
+              -H 'Content-Type: application/json' \
+              -d "$PAYLOAD" 2>&1) || { echo "❌ $name: connection failed ($url)"; FAILED=$((FAILED+1)); return; }
+            if echo "$resp" | grep -q '"result"'; then
+              local block
+              block=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(int(d['result'],16))" 2>/dev/null || echo "?")
+              echo "✅ $name: block=$block ($url)"
+            else
+              echo "❌ $name: bad response — $resp"
+              FAILED=$((FAILED+1))
+            fi
+          }
+
+          echo "=== Mainnet RPC Health Check ==="
+          check_rpc "ETH (Infura)"    "https://mainnet.infura.io/v3/$INFURA_KEY"
+          check_rpc "BNB"             "https://bsc-dataseed.binance.org/"
+          check_rpc "MATIC (Polygon)" "https://rpc.ankr.com/polygon/afbbed6c16c518a252ca00b02d488e4ce457fb930b5f2aff5437a3a5191fb731"
+          check_rpc "ARBETH"          "https://arb1.arbitrum.io/rpc"
+          check_rpc "AURETH (Aurora)" "https://mainnet.aurora.dev"
+          check_rpc "XDAI (Gnosis)"   "https://rpc.gnosischain.com"
+          check_rpc "AVAX"            "https://api.avax.network/ext/bc/C/rpc"
+          check_rpc "MOVR (Moonriver)" "https://rpc.moonriver.moonbeam.network"
+          check_rpc "ONE (Harmony)"   "https://api.harmony.one"
+          check_rpc "AME"             "https://node1.amechain.io"
+
+          echo ""
+          if [ "$FAILED" -gt 0 ]; then
+            echo "❌ $FAILED endpoint(s) failed. Remove dead chains from config or update RPC URLs."
+            exit 1
+          else
+            echo "✅ All 10 endpoints healthy."
+          fi

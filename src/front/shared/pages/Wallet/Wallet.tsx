@@ -487,4 +487,4 @@ const mapStateToProps = ({
   }
 }
 
-export default cssModules(connect(mapStateToProps)(Wallet), styles, { allowMultiple: true })
+export default connect(mapStateToProps)(cssModules(Wallet, styles, { allowMultiple: true }))

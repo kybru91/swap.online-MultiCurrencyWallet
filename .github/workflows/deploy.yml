@@ -189,11 +189,15 @@ jobs:
           echo "Waiting 10 seconds for deployment to settle..."
           sleep 10
 
-          # Check if info.json is accessible
+          # Check info.json is accessible and contains valid JSON
+          RESPONSE=$(curl -sf https://farm.wpmix.net/updates/mcw-info.json 2>/dev/null || echo "")
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://farm.wpmix.net/updates/mcw-info.json || echo "000")
 
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✓ Health check passed (HTTP $HTTP_CODE)"
+            echo "$RESPONSE" | python3 -m json.tool > /dev/null 2>&1 && \
+              echo "✓ info.json is valid JSON" || \
+              echo "⚠ Warning: info.json may not be valid JSON"
           else
             echo "⚠ Warning: Health check returned HTTP $HTTP_CODE (non-blocking)"
           fi

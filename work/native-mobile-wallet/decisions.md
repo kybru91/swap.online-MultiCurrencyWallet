@@ -331,3 +331,22 @@ All findings fixed in commit a42dd7b7d.
 - `./gradlew lint` -> 0 errors, 50 warnings
 - Full report: [logs/working/task-14/pre-deploy-qa-report.json]
 - Human-readable: [logs/working/task-14/pre-deploy-qa-report.md]
+
+## Task 4: Biometric Authentication + Auto-lock (Re-implementation)
+
+**Status:** Done
+**Commit:** 4ed80a38e (implementation), 3683db45f (review reports)
+**Agent:** auth-engineer
+**Summary:** Full re-implementation of AuthManager in :core:auth (QA found empty stub). Implemented BiometricPrompt integration via BiometricChecker interface, password authentication with bcrypt verification via PasswordHasher interface, exponential lockout (60s/120s/300s) after 5 failed attempts with persisted failure counter and lockout timestamp, biometric fallback after 3 failures, auto-lock timers (5-minute inactivity coroutine, 30-second background check), LockState sealed class with StateFlow for UI observation, and Hilt @Singleton DI. Added TimeProvider interface for deterministic timer testing. Extended SecureStorage with getAuthInt/saveAuthInt/getAuthLong/saveAuthLong for lockout state persistence.
+**Deviations:** None. All acceptance criteria match task spec exactly. BiometricChecker/PasswordHasher/TimeProvider interfaces added (not in original spec) for testability -- standard practice for Android unit testing without instrumentation.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer-4: APPROVE_WITH_MINOR (1 low fixed: misleading comment, 1 low accepted: thread-safety note, 2 info) -> [logs/working/task-4/code-reviewer-4-round1.json]
+- security-auditor-4: APPROVE (0 issues, 4 positive observations, 2 info accepted) -> [logs/working/task-4/security-auditor-4-round1.json]
+
+**Verification:**
+- `./gradlew :core:auth:test` -> BUILD SUCCESSFUL, 38 tests passed per variant (76 total debug+release)
+- `./gradlew :core:storage:test` -> BUILD SUCCESSFUL (no regressions from SecureStorage changes)
+- All 8 TDD anchors covered: biometricAvailability, passwordValidation, lockoutAfter5Failures, lockoutProgression, lockoutPersistence, biometricFallbackAfter3Failures, autoLockInactivity, autoLockBackground

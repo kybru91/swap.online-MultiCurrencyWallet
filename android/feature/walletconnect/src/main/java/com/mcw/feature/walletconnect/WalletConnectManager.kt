@@ -18,8 +18,8 @@ import javax.inject.Singleton
  * - Validate relay servers (only relay.walletconnect.com / relay.walletconnect.org)
  * - Expose active session count for dApps tab badge
  *
- * The actual WalletConnect Sign SDK pairing is delegated to [WalletConnectSignClient],
- * an interface that wraps the real SDK. This allows unit testing without SDK initialization.
+ * The actual WalletConnect Sign SDK pairing will be wired during integration phase.
+ * This manager handles session state and validation; the SDK callback bridge is external.
  *
  * Thread safety: all session state is managed via [_sessions] StateFlow.
  * Public methods are not synchronized — callers must ensure sequential access
@@ -77,12 +77,8 @@ class WalletConnectManager @Inject constructor(
      */
     fun processQrCode(qrContent: String): WalletConnectUriParser.ParsedUri? {
         return try {
+            // parse() internally validates relay URL if present
             val parsed = WalletConnectUriParser.parse(qrContent)
-
-            // Validate relay URL if present in the URI
-            if (parsed.relayUrl != null) {
-                WalletConnectUriParser.validateRelayUrl(parsed.relayUrl)
-            }
 
             _error.value = null
             parsed

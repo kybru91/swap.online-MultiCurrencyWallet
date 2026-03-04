@@ -1,0 +1,53 @@
+{
+  "reviewer": "security-auditor-11",
+  "task": 11,
+  "round": 1,
+  "timestamp": "2026-03-05T00:00:00Z",
+  "verdict": "PASS",
+  "summary": "Security posture is strong. Relay validation prevents MITM via untrusted servers. Session persistence uses EncryptedSharedPreferences (AES-256-GCM). 24h session expiry limits window of exposure. URI parsing is defensive with no injection vectors. No secrets logged.",
+  "findings": [
+    {
+      "id": "SA-11-1",
+      "severity": "info",
+      "file": "WalletConnectUriParser.kt",
+      "line": 120,
+      "finding": "validateRelayUrl catches generic Exception when parsing URI. If URI parsing fails, the raw URL string is used for comparison, which will always fail the allowlist check. This is correct fail-closed behavior.",
+      "recommendation": "No change needed. Fail-closed is the right approach for relay validation."
+    },
+    {
+      "id": "SA-11-2",
+      "severity": "info",
+      "file": "WalletConnectSession.kt",
+      "line": 1,
+      "finding": "Session data (topic, peerName, peerUrl, peerIcon) is persisted in EncryptedSharedPreferences via SecureStorage. No sensitive keys (private keys, mnemonics) are stored in session data. The data class toString() does not contain secrets.",
+      "recommendation": "No change needed. Session data does not include any sensitive wallet information."
+    },
+    {
+      "id": "SA-11-3",
+      "severity": "info",
+      "file": "WalletConnectManager.kt",
+      "line": 191,
+      "finding": "cleanupExpiredSessions uses >= comparison for 24h boundary, meaning sessions at exactly 24h are removed. This is the correct conservative approach — no grace period that could extend session lifetime.",
+      "recommendation": "No change needed."
+    },
+    {
+      "id": "SA-11-4",
+      "severity": "info",
+      "file": "WalletConnectUriParser.kt",
+      "line": 25,
+      "finding": "ALLOWED_RELAYS is a val (immutable reference) pointing to a Set (immutable collection). Cannot be modified at runtime. Only relay.walletconnect.com and relay.walletconnect.org are permitted, matching the spec requirement.",
+      "recommendation": "No change needed."
+    }
+  ],
+  "passed_checks": [
+    "Relay validation: only relay.walletconnect.com and relay.walletconnect.org allowed",
+    "Subdomain attack prevention: relay.walletconnect.com.evil.io correctly rejected",
+    "Session persistence: EncryptedSharedPreferences (AES-256-GCM) via SecureStorage",
+    "No sensitive data in session objects (no private keys, mnemonics, passwords)",
+    "24h session lifetime enforced with >= boundary comparison",
+    "Fail-closed URI parsing: invalid URIs rejected, not silently ignored",
+    "No hardcoded secrets or API keys",
+    "No network calls in manager (relay connection is SDK-level, not in this code)",
+    "Error messages do not leak internal state (generic 'Invalid QR code' for parse failures)"
+  ]
+}

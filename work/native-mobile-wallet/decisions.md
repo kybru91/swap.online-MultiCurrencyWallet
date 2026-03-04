@@ -172,3 +172,28 @@ All actionable findings addressed in fix commit 3def5621d.
 - Offline mode: all 3 network methods (balance, token balance, gas) return null on error
 - Fiat: 1.5 * $50000 = $75000.00
 - EIP-155 signing produces different signatures for different keys
+
+## Task 8: Wallet UI + Navigation
+
+**Status:** Done
+**Commit:** bef60aeac, 52b723e88
+**Agent:** ui-engineer
+**Summary:** Implemented Compose single-activity architecture with NavHost, bottom navigation (Wallet/dApps tabs), OnboardingViewModel with seed confirmation retry logic (3 random words, max 3 attempts then reset), WalletViewModel with pull-to-refresh balance display and offline mode state, FLAG_SECURE on mnemonic/seed screens, and stub screens for Send/History/Settings/dApp Browser. ViewModels are plain classes (not @HiltViewModel) because CryptoManager lacks @Inject constructor; the NavHost uses OnboardingPlaceholder pending assisted injection setup. EvmBalanceFetcher interface introduced to decouple app module from web3j dependency.
+**Deviations:** ViewModels are not @HiltViewModel -- CryptoManager and BtcManager have non-injectable constructor params (NetworkParameters). Onboarding NavHost destination uses placeholder composable instead of real OnboardingScreen. WalletScreen uses state hoisting instead of internal ViewModel. These will be wired via assisted injection in integration phase. Used compose-material pullRefresh (deprecated) instead of Material3 PullToRefreshBox because BOM 2024.02.00 does not include it.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer-8: 1 low, 3 info -> [logs/working/task-8/code-reviewer-8-round1.json]
+- test-reviewer-8: 1 low, 3 info -> [logs/working/task-8/test-reviewer-8-round1.json]
+
+*Round 2 (after fixes):*
+- code-reviewer-8: OK -> [logs/working/task-8/code-reviewer-8-round2.json]
+- test-reviewer-8: OK -> [logs/working/task-8/test-reviewer-8-round2.json]
+
+**Verification:**
+- `./gradlew :app:testDebugUnitTest` -> BUILD SUCCESSFUL, 21 tests passed (15 onboarding + 8 wallet, debug variant; same on release)
+- `./gradlew :app:lintDebug` -> BUILD SUCCESSFUL, 0 errors
+- Seed confirmation: 3 failures reset to mnemonic display, attempt counter resets to 0
+- Offline mode: retain previous balances, show error banner, disable Send, clear on reconnect
+- Password validation: 8+ chars required, mismatch detected, bcrypt $2a$12$ hash verified

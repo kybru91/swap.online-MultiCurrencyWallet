@@ -20,11 +20,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.mcw.wallet.ui.history.HistoryScreen
 import com.mcw.wallet.ui.stub.DAppBrowserStubScreen
 import com.mcw.wallet.ui.stub.DAppsTabScreen
-import com.mcw.wallet.ui.stub.HistoryStubScreen
 import com.mcw.wallet.ui.send.SendScreen
-import com.mcw.wallet.ui.stub.SettingsStubScreen
+import com.mcw.wallet.ui.settings.SettingsScreen
 import com.mcw.wallet.ui.wallet.WalletScreen
 
 /**
@@ -144,16 +144,16 @@ fun WalletApp(hasWallet: Boolean = false) {
           )
         }
 
-        // History screen (stub)
+        // History screen — real composable, ViewModel wired in integration phase
         composable(NavRoutes.HISTORY) {
-          HistoryStubScreen(
+          HistoryScreen(
             onNavigateBack = { navController.popBackStack() }
           )
         }
 
-        // Settings screen (stub)
+        // Settings screen — real composable, ViewModel wired in integration phase
         composable(NavRoutes.SETTINGS) {
-          SettingsStubScreen(
+          SettingsScreen(
             onNavigateBack = { navController.popBackStack() }
           )
         }

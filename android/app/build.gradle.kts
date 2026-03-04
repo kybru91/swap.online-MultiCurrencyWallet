@@ -12,7 +12,9 @@ android {
   compileSdk = rootProject.extra["compileSdk"] as Int
 
   defaultConfig {
-    applicationId = "com.mcw.wallet"
+    // White-label: applicationId can be overridden via gradle property
+    // Usage: ./gradlew assembleRelease -PAPP_ID=com.client.wallet -PAPP_NAME="Client Wallet"
+    applicationId = project.findProperty("APP_ID")?.toString() ?: "com.mcw.wallet"
     minSdk = rootProject.extra["minSdk"] as Int
     targetSdk = rootProject.extra["targetSdk"] as Int
     versionCode = 1
@@ -20,8 +22,10 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-    // White-label: app name from build config
-    resValue("string", "app_name", project.findProperty("APP_NAME")?.toString() ?: "MCW Wallet")
+    // White-label: app name from gradle property, exposed as string resource and BuildConfig field
+    val appName = project.findProperty("APP_NAME")?.toString() ?: "MCW Wallet"
+    resValue("string", "app_name", appName)
+    buildConfigField("String", "APP_NAME", "\"${appName.replace("\"", "\\\"")}\"")
   }
 
   buildTypes {
@@ -92,6 +96,9 @@ dependencies {
   implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
   implementation("com.google.firebase:firebase-crashlytics")
   implementation("com.google.firebase:firebase-analytics")
+
+  // Timber — structured logging with pluggable trees
+  implementation("com.jakewharton.timber:timber:5.0.1")
 
   // Core KTX
   implementation("androidx.core:core-ktx:1.12.0")

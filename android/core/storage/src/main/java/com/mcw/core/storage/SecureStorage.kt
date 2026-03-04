@@ -124,6 +124,62 @@ class SecureStorage private constructor(
     return getStringOrHandleCorruption(KEY_WC_SESSIONS)
   }
 
+  // --- Custom RPC Config ---
+
+  /**
+   * Stores custom RPC URL for a specific chain.
+   * Persisted as JSON string mapping chain IDs to custom URLs.
+   */
+  fun saveCustomRpcConfig(chainId: Long, rpcUrl: String) {
+    val existing = getCustomRpcConfig()
+    val updated = existing.toMutableMap()
+    updated[chainId.toString()] = rpcUrl
+    // Simple JSON serialization: {"1":"https://...","56":"https://..."}
+    val json = updated.entries.joinToString(",", "{", "}") { (k, v) ->
+      "\"$k\":\"$v\""
+    }
+    prefs.edit()
+      .putString(KEY_CUSTOM_RPC_CONFIG, json)
+      .apply()
+  }
+
+  /**
+   * Retrieves custom RPC config as a map of chain ID -> URL.
+   * @return map of chain ID strings to custom RPC URLs
+   */
+  fun getCustomRpcConfig(): Map<String, String> {
+    val json = getStringOrHandleCorruption(KEY_CUSTOM_RPC_CONFIG) ?: return emptyMap()
+    return parseSimpleJsonMap(json)
+  }
+
+  /**
+   * Gets the custom RPC URL for a specific chain, if configured.
+   */
+  fun getCustomRpcUrl(chainId: Long): String? {
+    return getCustomRpcConfig()[chainId.toString()]
+  }
+
+  /**
+   * Simple JSON map parser for {"key":"value",...} format.
+   * Avoids external JSON dependency in :core:storage module.
+   */
+  private fun parseSimpleJsonMap(json: String): Map<String, String> {
+    val result = mutableMapOf<String, String>()
+    val content = json.trim().removeSurrounding("{", "}")
+    if (content.isBlank()) return result
+    // Split on ","  and parse "key":"value" pairs
+    val pairs = content.split(",")
+    for (pair in pairs) {
+      val parts = pair.split(":", limit = 2)
+      if (parts.size == 2) {
+        val key = parts[0].trim().removeSurrounding("\"")
+        val value = parts[1].trim().removeSurrounding("\"")
+        result[key] = value
+      }
+    }
+    return result
+  }
+
   // --- Active Chain ID ---
 
   /**
@@ -218,6 +274,7 @@ class SecureStorage private constructor(
     const val KEY_PASSWORD_HASH = "app_password_hash"
     const val KEY_WC_SESSIONS = "wc_sessions"
     const val KEY_ACTIVE_CHAIN_ID = "active_chain_id"
+    const val KEY_CUSTOM_RPC_CONFIG = "custom_rpc_config"
 
     /** Default EVM chain ID: ETH mainnet */
     private const val DEFAULT_CHAIN_ID = 1L

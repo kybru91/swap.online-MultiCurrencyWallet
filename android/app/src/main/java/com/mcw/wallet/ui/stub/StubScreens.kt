@@ -28,9 +28,9 @@ import androidx.compose.ui.unit.dp
  * Stub screens for navigation destinations that will be implemented in later tasks.
  * These provide placeholder UI so the navigation graph is complete.
  *
- * - SendScreen: Task 9
- * - HistoryScreen: Task 12
- * - SettingsScreen: Task 13
+ * - SendScreen: Task 9 (implemented)
+ * - HistoryScreen: Task 12 (implemented)
+ * - SettingsScreen: Task 13 (implemented)
  * - DAppBrowserScreen: Task 10
  * - DAppsTabScreen: Task 10
  */
@@ -64,22 +64,6 @@ fun HistoryStubScreen(onNavigateBack: () -> Unit = {}) {
       },
     )
     StubContent("Transaction History", "Will be implemented in Task 12")
-  }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SettingsStubScreen(onNavigateBack: () -> Unit = {}) {
-  Column(modifier = Modifier.fillMaxSize()) {
-    TopAppBar(
-      title = { Text("Settings") },
-      navigationIcon = {
-        IconButton(onClick = onNavigateBack) {
-          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-        }
-      },
-    )
-    StubContent("Settings", "Will be implemented in Task 13")
   }
 }
 

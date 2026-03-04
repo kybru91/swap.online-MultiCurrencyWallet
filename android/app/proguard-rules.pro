@@ -40,6 +40,9 @@
 -keep class javax.inject.** { *; }
 -keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager.FragmentContextWrapper { *; }
 
+# Timber
+-dontwarn timber.log.**
+
 # Kotlin
 -keep class kotlin.** { *; }
 -dontwarn kotlin.**

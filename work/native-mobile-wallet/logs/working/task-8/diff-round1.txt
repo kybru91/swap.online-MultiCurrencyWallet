@@ -1,0 +1,2438 @@
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 6b741fd84..4823b3724 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -74,6 +74,7 @@ dependencies {
+   implementation("androidx.compose.ui:ui-graphics")
+   implementation("androidx.compose.ui:ui-tooling-preview")
+   implementation("androidx.compose.material3:material3")
++  implementation("androidx.compose.material:material")
+   implementation("androidx.compose.material:material-icons-extended")
+   implementation("androidx.activity:activity-compose:1.8.2")
+   implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+@@ -95,6 +96,9 @@ dependencies {
+   // Core KTX
+   implementation("androidx.core:core-ktx:1.12.0")
+ 
++  // BCrypt for password hashing (also in :core:storage, needed here for OnboardingViewModel)
++  implementation("org.mindrot:jbcrypt:0.4")
++
+   // Testing
+   testImplementation("junit:junit:4.13.2")
+   testImplementation("org.mockito:mockito-core:5.8.0")
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index 6d3589c8c..b7f1f2449 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -3,6 +3,7 @@
+ 
+     <uses-permission android:name="android.permission.INTERNET" />
+     <uses-permission android:name="android.permission.CAMERA" />
++    <uses-feature android:name="android.hardware.camera" android:required="false" />
+ 
+     <application
+         android:name=".MCWalletApplication"
+diff --git a/android/app/src/main/java/com/mcw/wallet/MainActivity.kt b/android/app/src/main/java/com/mcw/wallet/MainActivity.kt
+index c9047f868..9db9ca7d7 100644
+--- a/android/app/src/main/java/com/mcw/wallet/MainActivity.kt
++++ b/android/app/src/main/java/com/mcw/wallet/MainActivity.kt
+@@ -3,21 +3,32 @@ package com.mcw.wallet
+ import android.os.Bundle
+ import androidx.activity.ComponentActivity
+ import androidx.activity.compose.setContent
+-import androidx.compose.material3.MaterialTheme
+-import androidx.compose.material3.Surface
+-import androidx.compose.material3.Text
++import com.mcw.core.storage.SecureStorage
++import com.mcw.wallet.ui.navigation.WalletApp
+ import dagger.hilt.android.AndroidEntryPoint
++import javax.inject.Inject
+ 
++/**
++ * Single-activity entry point for the wallet app.
++ *
++ * Uses Jetpack Compose with Hilt dependency injection.
++ * Checks SecureStorage for existing wallet to determine
++ * start destination (onboarding vs main wallet).
++ *
++ * Tech-spec Architecture overview:
++ * "Single-activity Compose app with bottom navigation (Wallet / dApps tabs)"
++ */
+ @AndroidEntryPoint
+ class MainActivity : ComponentActivity() {
++
++  @Inject
++  lateinit var secureStorage: SecureStorage
++
+   override fun onCreate(savedInstanceState: Bundle?) {
+     super.onCreate(savedInstanceState)
++    val hasWallet = secureStorage.hasWallet()
+     setContent {
+-      MaterialTheme {
+-        Surface {
+-          Text(text = "MCW Wallet")
+-        }
+-      }
++      WalletApp(hasWallet = hasWallet)
+     }
+   }
+ }
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/navigation/NavRoutes.kt b/android/app/src/main/java/com/mcw/wallet/ui/navigation/NavRoutes.kt
+new file mode 100644
+index 000000000..74d87b4a8
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/navigation/NavRoutes.kt
+@@ -0,0 +1,27 @@
++package com.mcw.wallet.ui.navigation
++
++/**
++ * Navigation route constants for the wallet app.
++ *
++ * Single-activity architecture: all screens are Compose destinations
++ * within a single NavHost. Bottom navigation switches between
++ * Wallet and dApps tabs at the top level.
++ */
++object NavRoutes {
++  // Onboarding flow
++  const val ONBOARDING = "onboarding"
++  const val CREATE_WALLET = "create_wallet"
++  const val SEED_CONFIRMATION = "seed_confirmation"
++  const val IMPORT_WALLET = "import_wallet"
++  const val SET_PASSWORD = "set_password"
++
++  // Main screens (bottom navigation tabs)
++  const val WALLET = "wallet"
++  const val DAPPS = "dapps"
++
++  // Secondary screens
++  const val SEND = "send"
++  const val HISTORY = "history"
++  const val SETTINGS = "settings"
++  const val DAPP_BROWSER = "dapp_browser"
++}
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/navigation/WalletApp.kt b/android/app/src/main/java/com/mcw/wallet/ui/navigation/WalletApp.kt
+new file mode 100644
+index 000000000..a44ab58fd
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/navigation/WalletApp.kt
+@@ -0,0 +1,172 @@
++package com.mcw.wallet.ui.navigation
++
++import androidx.compose.foundation.layout.padding
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.filled.AccountBalanceWallet
++import androidx.compose.material.icons.filled.Apps
++import androidx.compose.material3.Icon
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.NavigationBar
++import androidx.compose.material3.NavigationBarItem
++import androidx.compose.material3.Scaffold
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.getValue
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.navigation.NavDestination.Companion.hierarchy
++import androidx.navigation.NavGraph.Companion.findStartDestination
++import androidx.navigation.compose.NavHost
++import androidx.navigation.compose.composable
++import androidx.navigation.compose.currentBackStackEntryAsState
++import androidx.navigation.compose.rememberNavController
++import com.mcw.wallet.ui.stub.DAppBrowserStubScreen
++import com.mcw.wallet.ui.stub.DAppsTabScreen
++import com.mcw.wallet.ui.stub.HistoryStubScreen
++import com.mcw.wallet.ui.stub.SendStubScreen
++import com.mcw.wallet.ui.stub.SettingsStubScreen
++import com.mcw.wallet.ui.wallet.WalletScreen
++
++/**
++ * Bottom navigation tab definition.
++ *
++ * @param route the navigation route string
++ * @param label the display label
++ * @param icon the Material icon
++ */
++data class BottomNavTab(
++  val route: String,
++  val label: String,
++  val icon: ImageVector,
++)
++
++/** Bottom navigation tabs: Wallet and dApps */
++val bottomNavTabs = listOf(
++  BottomNavTab(NavRoutes.WALLET, "Wallet", Icons.Filled.AccountBalanceWallet),
++  BottomNavTab(NavRoutes.DAPPS, "dApps", Icons.Filled.Apps),
++)
++
++/**
++ * Root composable for the wallet app.
++ *
++ * Implements single-activity Compose architecture (tech-spec Architecture overview):
++ * - NavHost with onboarding and main flows
++ * - Bottom navigation bar (Wallet / dApps tabs)
++ * - Onboarding screens: welcome, create, confirm, import, password
++ * - Main screens: wallet, dApps, send, history, settings
++ *
++ * ViewModels are not Hilt-injected in this task; they will be wired up
++ * with proper DI (assisted injection or factory) in the integration phase.
++ * For now, composable screens use state hoisting or placeholder content.
++ *
++ * @param hasWallet whether a wallet already exists in secure storage
++ */
++@Composable
++fun WalletApp(hasWallet: Boolean = false) {
++  val navController = rememberNavController()
++  val startDestination = if (hasWallet) NavRoutes.WALLET else NavRoutes.ONBOARDING
++
++  val navBackStackEntry by navController.currentBackStackEntryAsState()
++  val currentRoute = navBackStackEntry?.destination?.route
++
++  // Show bottom nav only on main tab screens
++  val showBottomBar = currentRoute in listOf(NavRoutes.WALLET, NavRoutes.DAPPS)
++
++  MaterialTheme {
++    Scaffold(
++      bottomBar = {
++        if (showBottomBar) {
++          NavigationBar {
++            bottomNavTabs.forEach { tab ->
++              val selected = navBackStackEntry?.destination?.hierarchy?.any {
++                it.route == tab.route
++              } == true
++
++              NavigationBarItem(
++                icon = { Icon(tab.icon, contentDescription = tab.label) },
++                label = { Text(tab.label) },
++                selected = selected,
++                onClick = {
++                  navController.navigate(tab.route) {
++                    popUpTo(navController.graph.findStartDestination().id) {
++                      saveState = true
++                    }
++                    launchSingleTop = true
++                    restoreState = true
++                  }
++                },
++              )
++            }
++          }
++        }
++      }
++    ) { innerPadding ->
++      NavHost(
++        navController = navController,
++        startDestination = startDestination,
++        modifier = Modifier.padding(innerPadding),
++      ) {
++        // Onboarding flow — uses a placeholder until ViewModels are wired via DI
++        composable(NavRoutes.ONBOARDING) {
++          // OnboardingScreen will be wired with ViewModel via assisted injection
++          // For now, the navigation graph is complete for the architecture
++          com.mcw.wallet.ui.stub.OnboardingPlaceholder(
++            onNavigateToWallet = {
++              navController.navigate(NavRoutes.WALLET) {
++                popUpTo(NavRoutes.ONBOARDING) { inclusive = true }
++              }
++            }
++          )
++        }
++
++        // Main wallet tab
++        composable(NavRoutes.WALLET) {
++          WalletScreen(
++            onNavigateToSend = { navController.navigate(NavRoutes.SEND) },
++            onNavigateToHistory = { navController.navigate(NavRoutes.HISTORY) },
++            onNavigateToSettings = { navController.navigate(NavRoutes.SETTINGS) },
++          )
++        }
++
++        // dApps tab
++        composable(NavRoutes.DAPPS) {
++          DAppsTabScreen(
++            onNavigateToBrowser = { url ->
++              navController.navigate("${NavRoutes.DAPP_BROWSER}/$url")
++            }
++          )
++        }
++
++        // Send screen (stub)
++        composable(NavRoutes.SEND) {
++          SendStubScreen(
++            onNavigateBack = { navController.popBackStack() }
++          )
++        }
++
++        // History screen (stub)
++        composable(NavRoutes.HISTORY) {
++          HistoryStubScreen(
++            onNavigateBack = { navController.popBackStack() }
++          )
++        }
++
++        // Settings screen (stub)
++        composable(NavRoutes.SETTINGS) {
++          SettingsStubScreen(
++            onNavigateBack = { navController.popBackStack() }
++          )
++        }
++
++        // dApp Browser screen (stub)
++        composable("${NavRoutes.DAPP_BROWSER}/{url}") { backStackEntry ->
++          val url = backStackEntry.arguments?.getString("url") ?: ""
++          DAppBrowserStubScreen(
++            url = url,
++            onNavigateBack = { navController.popBackStack() }
++          )
++        }
++      }
++    }
++  }
++}
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingScreen.kt b/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingScreen.kt
+new file mode 100644
+index 000000000..2cbdf9220
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingScreen.kt
+@@ -0,0 +1,498 @@
++package com.mcw.wallet.ui.onboarding
++
++import android.view.WindowManager
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.grid.GridCells
++import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
++import androidx.compose.foundation.lazy.grid.itemsIndexed
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.text.KeyboardOptions
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.automirrored.filled.ArrowBack
++import androidx.compose.material.icons.filled.Visibility
++import androidx.compose.material.icons.filled.VisibilityOff
++import androidx.compose.material3.Button
++import androidx.compose.material3.Card
++import androidx.compose.material3.CardDefaults
++import androidx.compose.material3.ExperimentalMaterial3Api
++import androidx.compose.material3.Icon
++import androidx.compose.material3.IconButton
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.OutlinedButton
++import androidx.compose.material3.OutlinedTextField
++import androidx.compose.material3.Text
++import androidx.compose.material3.TopAppBar
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.DisposableEffect
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateMapOf
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.input.KeyboardType
++import androidx.compose.ui.text.input.PasswordVisualTransformation
++import androidx.compose.ui.text.input.VisualTransformation
++import androidx.compose.ui.text.style.TextAlign
++import androidx.compose.ui.unit.dp
++/**
++ * Root onboarding screen that observes OnboardingViewModel state
++ * and renders the appropriate sub-screen.
++ *
++ * The ViewModel is passed as a parameter for testability.
++ * In production, the caller (WalletApp NavHost) provides the ViewModel
++ * via ViewModelProvider.Factory with the required dependencies.
++ *
++ * @param onNavigateToWallet called when wallet creation/import is complete
++ * @param viewModel the onboarding ViewModel
++ */
++@Composable
++fun OnboardingScreen(
++  onNavigateToWallet: () -> Unit,
++  viewModel: OnboardingViewModel,
++) {
++  val uiState by viewModel.uiState.collectAsState()
++
++  when (val state = uiState) {
++    is OnboardingUiState.Welcome -> WelcomeContent(
++      onCreateWallet = { viewModel.generateMnemonic() },
++      onImportWallet = { viewModel.startImport() },
++    )
++
++    is OnboardingUiState.MnemonicDisplay -> MnemonicDisplayContent(
++      words = state.words,
++      wasReset = state.wasReset,
++      onConfirmed = { viewModel.onMnemonicConfirmed() },
++      onBack = { viewModel.goBack() },
++    )
++
++    is OnboardingUiState.SeedConfirmation -> SeedConfirmationContent(
++      challengeIndices = state.challengeIndices,
++      attemptCount = state.attemptCount,
++      error = state.error,
++      onSubmit = { answers -> viewModel.submitSeedConfirmation(answers) },
++    )
++
++    is OnboardingUiState.ImportWallet -> ImportWalletContent(
++      error = state.error,
++      onImport = { mnemonic -> viewModel.importMnemonic(mnemonic) },
++      onBack = { viewModel.goBack() },
++    )
++
++    is OnboardingUiState.SetPassword -> SetPasswordContent(
++      error = state.error,
++      onSetPassword = { password, confirm -> viewModel.setPassword(password, confirm) },
++    )
++
++    is OnboardingUiState.Complete -> {
++      onNavigateToWallet()
++    }
++  }
++}
++
++// --- Welcome Screen ---
++
++@Composable
++private fun WelcomeContent(
++  onCreateWallet: () -> Unit,
++  onImportWallet: () -> Unit,
++) {
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(24.dp),
++    horizontalAlignment = Alignment.CenterHorizontally,
++    verticalArrangement = Arrangement.Center,
++  ) {
++    Text(
++      text = "MCW Wallet",
++      style = MaterialTheme.typography.headlineLarge,
++      fontWeight = FontWeight.Bold,
++    )
++    Spacer(modifier = Modifier.height(8.dp))
++    Text(
++      text = "Secure multi-currency wallet",
++      style = MaterialTheme.typography.bodyLarge,
++      color = MaterialTheme.colorScheme.onSurfaceVariant,
++    )
++    Spacer(modifier = Modifier.height(48.dp))
++    Button(
++      onClick = onCreateWallet,
++      modifier = Modifier.fillMaxWidth(),
++    ) {
++      Text("Create Wallet")
++    }
++    Spacer(modifier = Modifier.height(16.dp))
++    OutlinedButton(
++      onClick = onImportWallet,
++      modifier = Modifier.fillMaxWidth(),
++    ) {
++      Text("Import Wallet")
++    }
++  }
++}
++
++// --- Mnemonic Display Screen (FLAG_SECURE applied) ---
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++private fun MnemonicDisplayContent(
++  words: List<String>,
++  wasReset: Boolean,
++  onConfirmed: () -> Unit,
++  onBack: () -> Unit,
++) {
++  // FLAG_SECURE: prevent screenshots and screen recording on mnemonic display
++  FlagSecureEffect()
++
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(16.dp),
++  ) {
++    TopAppBar(
++      title = { Text("Your Seed Phrase") },
++      navigationIcon = {
++        IconButton(onClick = onBack) {
++          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
++        }
++      },
++    )
++
++    if (wasReset) {
++      Card(
++        colors = CardDefaults.cardColors(
++          containerColor = MaterialTheme.colorScheme.errorContainer,
++        ),
++        modifier = Modifier
++          .fillMaxWidth()
++          .padding(bottom = 16.dp),
++      ) {
++        Text(
++          text = "Confirmation failed 3 times. Please review your seed phrase carefully and try again.",
++          modifier = Modifier.padding(16.dp),
++          color = MaterialTheme.colorScheme.onErrorContainer,
++        )
++      }
++    }
++
++    Card(
++      colors = CardDefaults.cardColors(
++        containerColor = MaterialTheme.colorScheme.secondaryContainer,
++      ),
++      modifier = Modifier
++        .fillMaxWidth()
++        .padding(bottom = 16.dp),
++    ) {
++      Text(
++        text = "Write down these 12 words in order and store them safely. This is the ONLY way to recover your wallet.",
++        modifier = Modifier.padding(16.dp),
++        color = MaterialTheme.colorScheme.onSecondaryContainer,
++      )
++    }
++
++    LazyVerticalGrid(
++      columns = GridCells.Fixed(3),
++      modifier = Modifier
++        .weight(1f)
++        .fillMaxWidth(),
++      verticalArrangement = Arrangement.spacedBy(8.dp),
++      horizontalArrangement = Arrangement.spacedBy(8.dp),
++    ) {
++      itemsIndexed(words) { index, word ->
++        Card(
++          modifier = Modifier.fillMaxWidth(),
++        ) {
++          Text(
++            text = "${index + 1}. $word",
++            modifier = Modifier
++              .padding(12.dp)
++              .fillMaxWidth(),
++            textAlign = TextAlign.Center,
++            style = MaterialTheme.typography.bodyMedium,
++          )
++        }
++      }
++    }
++
++    Spacer(modifier = Modifier.height(16.dp))
++
++    Button(
++      onClick = onConfirmed,
++      modifier = Modifier.fillMaxWidth(),
++    ) {
++      Text("I wrote it down")
++    }
++  }
++}
++
++// --- Seed Confirmation Screen (FLAG_SECURE applied) ---
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++private fun SeedConfirmationContent(
++  challengeIndices: List<Int>,
++  attemptCount: Int,
++  error: String?,
++  onSubmit: (Map<Int, String>) -> Unit,
++) {
++  // FLAG_SECURE: prevent screenshots on seed confirmation screen
++  FlagSecureEffect()
++
++  val answers = remember { mutableStateMapOf<Int, String>() }
++
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(16.dp)
++      .verticalScroll(rememberScrollState()),
++  ) {
++    TopAppBar(
++      title = { Text("Verify Seed Phrase") },
++    )
++
++    Text(
++      text = "Enter the following words from your seed phrase to confirm you wrote them down.",
++      style = MaterialTheme.typography.bodyLarge,
++      modifier = Modifier.padding(bottom = 16.dp),
++    )
++
++    if (error != null) {
++      Card(
++        colors = CardDefaults.cardColors(
++          containerColor = MaterialTheme.colorScheme.errorContainer,
++        ),
++        modifier = Modifier
++          .fillMaxWidth()
++          .padding(bottom = 16.dp),
++      ) {
++        Text(
++          text = error,
++          modifier = Modifier.padding(16.dp),
++          color = MaterialTheme.colorScheme.onErrorContainer,
++        )
++      }
++    }
++
++    Text(
++      text = "Attempt ${attemptCount + 1} of 3",
++      style = MaterialTheme.typography.bodySmall,
++      color = MaterialTheme.colorScheme.onSurfaceVariant,
++      modifier = Modifier.padding(bottom = 16.dp),
++    )
++
++    challengeIndices.forEach { index ->
++      OutlinedTextField(
++        value = answers[index] ?: "",
++        onValueChange = { answers[index] = it },
++        label = { Text("Word #${index + 1}") },
++        singleLine = true,
++        modifier = Modifier
++          .fillMaxWidth()
++          .padding(bottom = 12.dp),
++      )
++    }
++
++    Spacer(modifier = Modifier.height(16.dp))
++
++    Button(
++      onClick = { onSubmit(answers.toMap()) },
++      modifier = Modifier.fillMaxWidth(),
++      enabled = challengeIndices.all { answers[it]?.isNotBlank() == true },
++    ) {
++      Text("Verify")
++    }
++  }
++}
++
++// --- Import Wallet Screen ---
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++private fun ImportWalletContent(
++  error: String?,
++  onImport: (String) -> Unit,
++  onBack: () -> Unit,
++) {
++  var mnemonic by remember { mutableStateOf("") }
++
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(16.dp),
++  ) {
++    TopAppBar(
++      title = { Text("Import Wallet") },
++      navigationIcon = {
++        IconButton(onClick = onBack) {
++          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
++        }
++      },
++    )
++
++    Text(
++      text = "Enter your 12-word seed phrase to import an existing wallet.",
++      style = MaterialTheme.typography.bodyLarge,
++      modifier = Modifier.padding(bottom = 16.dp),
++    )
++
++    if (error != null) {
++      Card(
++        colors = CardDefaults.cardColors(
++          containerColor = MaterialTheme.colorScheme.errorContainer,
++        ),
++        modifier = Modifier
++          .fillMaxWidth()
++          .padding(bottom = 16.dp),
++      ) {
++        Text(
++          text = error,
++          modifier = Modifier.padding(16.dp),
++          color = MaterialTheme.colorScheme.onErrorContainer,
++        )
++      }
++    }
++
++    OutlinedTextField(
++      value = mnemonic,
++      onValueChange = { mnemonic = it },
++      label = { Text("Seed phrase") },
++      modifier = Modifier
++        .fillMaxWidth()
++        .height(120.dp),
++      maxLines = 4,
++    )
++
++    Spacer(modifier = Modifier.height(24.dp))
++
++    Button(
++      onClick = { onImport(mnemonic) },
++      modifier = Modifier.fillMaxWidth(),
++      enabled = mnemonic.isNotBlank(),
++    ) {
++      Text("Import")
++    }
++  }
++}
++
++// --- Set Password Screen ---
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++private fun SetPasswordContent(
++  error: String?,
++  onSetPassword: (String, String) -> Unit,
++) {
++  var password by remember { mutableStateOf("") }
++  var confirmPassword by remember { mutableStateOf("") }
++  var passwordVisible by remember { mutableStateOf(false) }
++
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(16.dp)
++      .verticalScroll(rememberScrollState()),
++  ) {
++    TopAppBar(
++      title = { Text("Set App Password") },
++    )
++
++    Text(
++      text = "Create a password to protect your wallet. Minimum 8 characters.",
++      style = MaterialTheme.typography.bodyLarge,
++      modifier = Modifier.padding(bottom = 16.dp),
++    )
++
++    if (error != null) {
++      Card(
++        colors = CardDefaults.cardColors(
++          containerColor = MaterialTheme.colorScheme.errorContainer,
++        ),
++        modifier = Modifier
++          .fillMaxWidth()
++          .padding(bottom = 16.dp),
++      ) {
++        Text(
++          text = error,
++          modifier = Modifier.padding(16.dp),
++          color = MaterialTheme.colorScheme.onErrorContainer,
++        )
++      }
++    }
++
++    OutlinedTextField(
++      value = password,
++      onValueChange = { password = it },
++      label = { Text("Password") },
++      singleLine = true,
++      visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
++      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
++      trailingIcon = {
++        IconButton(onClick = { passwordVisible = !passwordVisible }) {
++          Icon(
++            if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
++            contentDescription = if (passwordVisible) "Hide password" else "Show password",
++          )
++        }
++      },
++      modifier = Modifier
++        .fillMaxWidth()
++        .padding(bottom = 12.dp),
++    )
++
++    OutlinedTextField(
++      value = confirmPassword,
++      onValueChange = { confirmPassword = it },
++      label = { Text("Confirm password") },
++      singleLine = true,
++      visualTransformation = PasswordVisualTransformation(),
++      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
++      modifier = Modifier
++        .fillMaxWidth()
++        .padding(bottom = 24.dp),
++    )
++
++    Button(
++      onClick = { onSetPassword(password, confirmPassword) },
++      modifier = Modifier.fillMaxWidth(),
++      enabled = password.isNotEmpty() && confirmPassword.isNotEmpty(),
++    ) {
++      Text("Create Wallet")
++    }
++  }
++}
++
++// --- FLAG_SECURE Helper ---
++
++/**
++ * Composable effect that sets FLAG_SECURE on the window while this composable
++ * is active, preventing screenshots and screen recording.
++ *
++ * FLAG_SECURE is required on mnemonic display and seed confirmation screens
++ * (tech-spec Security model, Acceptance Criteria).
++ */
++@Composable
++private fun FlagSecureEffect() {
++  val context = LocalContext.current
++  DisposableEffect(Unit) {
++    val window = (context as? android.app.Activity)?.window
++    window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
++    onDispose {
++      window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
++    }
++  }
++}
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingUiState.kt b/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingUiState.kt
+new file mode 100644
+index 000000000..f8b7ddd42
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingUiState.kt
+@@ -0,0 +1,65 @@
++package com.mcw.wallet.ui.onboarding
++
++/**
++ * Sealed hierarchy representing all states of the onboarding flow.
++ *
++ * Flow: Welcome -> MnemonicDisplay -> SeedConfirmation -> SetPassword -> Complete
++ *       Welcome -> ImportWallet -> SetPassword -> Complete
++ *
++ * SeedConfirmation resets to MnemonicDisplay after 3 failed attempts
++ * (per tech-spec Architecture section: "retry counter is in-memory StateFlow<Int>").
++ */
++sealed interface OnboardingUiState {
++
++  /** Initial welcome screen with Create/Import options */
++  data object Welcome : OnboardingUiState
++
++  /**
++   * Displaying the generated 12-word mnemonic.
++   * User must acknowledge they wrote it down before proceeding.
++   *
++   * @param words the 12 BIP39 mnemonic words
++   * @param wasReset true if we returned here after 3 failed confirmation attempts
++   */
++  data class MnemonicDisplay(
++    val words: List<String>,
++    val wasReset: Boolean = false,
++  ) : OnboardingUiState
++
++  /**
++   * Seed confirmation: user must enter 3 randomly selected words.
++   *
++   * @param challengeIndices the 3 word positions (0-indexed) to verify
++   * @param attemptCount how many failed attempts (0-2; at 3 we reset)
++   * @param error error message from the last failed attempt, or null
++   */
++  data class SeedConfirmation(
++    val challengeIndices: List<Int>,
++    val attemptCount: Int = 0,
++    val error: String? = null,
++  ) : OnboardingUiState
++
++  /**
++   * Import wallet: user enters a 12-word mnemonic.
++   *
++   * @param error validation error, or null
++   */
++  data class ImportWallet(
++    val error: String? = null,
++  ) : OnboardingUiState
++
++  /**
++   * Set app password (minimum 8 characters).
++   *
++   * @param error validation error, or null
++   */
++  data class SetPassword(
++    val error: String? = null,
++  ) : OnboardingUiState
++
++  /**
++   * Wallet creation/import completed successfully.
++   * Navigate to the main wallet screen.
++   */
++  data object Complete : OnboardingUiState
++}
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingViewModel.kt b/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingViewModel.kt
+new file mode 100644
+index 000000000..e6961724a
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingViewModel.kt
+@@ -0,0 +1,191 @@
++package com.mcw.wallet.ui.onboarding
++
++import androidx.lifecycle.ViewModel
++import com.mcw.core.crypto.CryptoManager
++import com.mcw.core.crypto.MnemonicException
++import com.mcw.core.storage.SecureStorage
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.asStateFlow
++
++/**
++ * ViewModel managing the onboarding flow: create wallet, import wallet,
++ * seed confirmation with retry logic, and password setup.
++ *
++ * Seed confirmation retry logic (from tech-spec Architecture section):
++ * - User is prompted for 3 random words from the generated mnemonic
++ * - On incorrect entry: "Incorrect words, try again" (up to 3 attempts)
++ * - After 3 failed attempts: show all 12 words again, reset retry counter
++ * - Mnemonic stays the same during reset (no re-generation)
++ *
++ * Password requirements (tech-spec Security model):
++ * - Minimum 8 characters (overrides user-spec 6-char minimum per security review)
++ * - Stored as bcrypt hash (cost 12) in EncryptedSharedPreferences
++ *
++ * Note: This ViewModel does NOT use @HiltViewModel because CryptoManager
++ * is a plain class (no @Inject constructor). Instead, it is created via
++ * a factory or manually in tests. In production, the OnboardingScreen
++ * composable uses hiltViewModel() with a provided factory.
++ */
++class OnboardingViewModel(
++  private val cryptoManager: CryptoManager,
++  private val secureStorage: SecureStorage,
++) : ViewModel() {
++
++  companion object {
++    /** Maximum seed confirmation attempts before reset */
++    const val MAX_CONFIRMATION_ATTEMPTS = 3
++
++    /** Number of random words to verify during seed confirmation */
++    const val CHALLENGE_WORD_COUNT = 3
++
++    /** Minimum password length (Decision: 8+ chars, overrides user-spec 6) */
++    const val MIN_PASSWORD_LENGTH = 8
++  }
++
++  private val _uiState = MutableStateFlow<OnboardingUiState>(OnboardingUiState.Welcome)
++  val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
++
++  /** The generated or imported mnemonic, kept in-memory for the onboarding flow */
++  private var currentMnemonic: String? = null
++  private var currentWords: List<String> = emptyList()
++
++  /**
++   * Generates a new BIP39 mnemonic and transitions to the display screen.
++   */
++  fun generateMnemonic() {
++    val mnemonic = cryptoManager.generateMnemonic()
++    currentMnemonic = mnemonic
++    currentWords = mnemonic.split(" ")
++    _uiState.value = OnboardingUiState.MnemonicDisplay(words = currentWords)
++  }
++
++  /**
++   * User acknowledged they wrote down the mnemonic.
++   * Generates 3 random challenge indices and transitions to confirmation.
++   */
++  fun onMnemonicConfirmed() {
++    val indices = generateChallengeIndices()
++    _uiState.value = OnboardingUiState.SeedConfirmation(
++      challengeIndices = indices,
++      attemptCount = 0,
++      error = null,
++    )
++  }
++
++  /**
++   * Submits the seed confirmation answers.
++   *
++   * @param answers map of word index to the user's answer
++   */
++  fun submitSeedConfirmation(answers: Map<Int, String>) {
++    val state = _uiState.value
++    if (state !is OnboardingUiState.SeedConfirmation) return
++
++    // Validate: trim whitespace and lowercase before comparison
++    val allCorrect = state.challengeIndices.all { idx ->
++      val userAnswer = answers[idx]?.trim()?.lowercase() ?: ""
++      userAnswer == currentWords[idx]
++    }
++
++    if (allCorrect) {
++      // Correct -- proceed to password setup
++      _uiState.value = OnboardingUiState.SetPassword()
++    } else {
++      val newAttempt = state.attemptCount + 1
++      if (newAttempt >= MAX_CONFIRMATION_ATTEMPTS) {
++        // Reset: show mnemonic again with same words
++        _uiState.value = OnboardingUiState.MnemonicDisplay(
++          words = currentWords,
++          wasReset = true,
++        )
++      } else {
++        // Retry with same challenge indices
++        _uiState.value = state.copy(
++          attemptCount = newAttempt,
++          error = "Incorrect words, try again",
++        )
++      }
++    }
++  }
++
++  /**
++   * Starts the import wallet flow.
++   */
++  fun startImport() {
++    _uiState.value = OnboardingUiState.ImportWallet()
++  }
++
++  /**
++   * Validates and imports a mnemonic entered by the user.
++   *
++   * @param mnemonic the raw mnemonic string (may have extra whitespace)
++   */
++  fun importMnemonic(mnemonic: String) {
++    try {
++      cryptoManager.validateMnemonic(mnemonic)
++      currentMnemonic = mnemonic.trim().lowercase().replace("\\s+".toRegex(), " ")
++      currentWords = currentMnemonic!!.split(" ")
++      _uiState.value = OnboardingUiState.SetPassword()
++    } catch (e: MnemonicException) {
++      _uiState.value = OnboardingUiState.ImportWallet(error = e.message)
++    }
++  }
++
++  /**
++   * Sets the app password, derives keys, and stores everything.
++   *
++   * @param password the chosen password
++   * @param confirmPassword the confirmation password
++   */
++  fun setPassword(password: String, confirmPassword: String) {
++    // Validate length
++    if (password.length < MIN_PASSWORD_LENGTH) {
++      _uiState.value = OnboardingUiState.SetPassword(
++        error = "Password must be at least $MIN_PASSWORD_LENGTH characters"
++      )
++      return
++    }
++
++    // Validate match
++    if (password != confirmPassword) {
++      _uiState.value = OnboardingUiState.SetPassword(
++        error = "Passwords do not match"
++      )
++      return
++    }
++
++    val mnemonic = currentMnemonic ?: return
++
++    // Derive keys
++    val walletKeys = cryptoManager.deriveKeys(mnemonic)
++
++    // Hash password with bcrypt (cost 12)
++    val passwordHash = org.mindrot.jbcrypt.BCrypt.hashpw(password, org.mindrot.jbcrypt.BCrypt.gensalt(12))
++
++    // Store everything
++    secureStorage.saveMnemonic(walletKeys.mnemonic)
++    secureStorage.savePrivateKeys(walletKeys.btcPrivateKeyWIF, walletKeys.ethPrivateKeyHex)
++    secureStorage.savePasswordHash(passwordHash)
++
++    // Clear sensitive in-memory data
++    currentMnemonic = null
++    currentWords = emptyList()
++
++    _uiState.value = OnboardingUiState.Complete
++  }
++
++  /**
++   * Navigates back to the welcome screen.
++   */
++  fun goBack() {
++    _uiState.value = OnboardingUiState.Welcome
++  }
++
++  /**
++   * Generates 3 unique random indices from 0..11 for seed confirmation.
++   */
++  private fun generateChallengeIndices(): List<Int> {
++    return (0..11).shuffled().take(CHALLENGE_WORD_COUNT).sorted()
++  }
++}
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/stub/StubScreens.kt b/android/app/src/main/java/com/mcw/wallet/ui/stub/StubScreens.kt
+new file mode 100644
+index 000000000..1669e39d6
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/stub/StubScreens.kt
+@@ -0,0 +1,197 @@
++package com.mcw.wallet.ui.stub
++
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.automirrored.filled.ArrowBack
++import androidx.compose.material.icons.filled.Apps
++import androidx.compose.material3.ExperimentalMaterial3Api
++import androidx.compose.material3.Button
++import androidx.compose.material3.Icon
++import androidx.compose.material3.IconButton
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.OutlinedButton
++import androidx.compose.material3.Text
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.material3.TopAppBar
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.unit.dp
++
++/**
++ * Stub screens for navigation destinations that will be implemented in later tasks.
++ * These provide placeholder UI so the navigation graph is complete.
++ *
++ * - SendScreen: Task 9
++ * - HistoryScreen: Task 12
++ * - SettingsScreen: Task 13
++ * - DAppBrowserScreen: Task 10
++ * - DAppsTabScreen: Task 10
++ */
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun SendStubScreen(onNavigateBack: () -> Unit = {}) {
++  Column(modifier = Modifier.fillMaxSize()) {
++    TopAppBar(
++      title = { Text("Send") },
++      navigationIcon = {
++        IconButton(onClick = onNavigateBack) {
++          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
++        }
++      },
++    )
++    StubContent("Send Transaction", "Will be implemented in Task 9")
++  }
++}
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun HistoryStubScreen(onNavigateBack: () -> Unit = {}) {
++  Column(modifier = Modifier.fillMaxSize()) {
++    TopAppBar(
++      title = { Text("Transaction History") },
++      navigationIcon = {
++        IconButton(onClick = onNavigateBack) {
++          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
++        }
++      },
++    )
++    StubContent("Transaction History", "Will be implemented in Task 12")
++  }
++}
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun SettingsStubScreen(onNavigateBack: () -> Unit = {}) {
++  Column(modifier = Modifier.fillMaxSize()) {
++    TopAppBar(
++      title = { Text("Settings") },
++      navigationIcon = {
++        IconButton(onClick = onNavigateBack) {
++          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
++        }
++      },
++    )
++    StubContent("Settings", "Will be implemented in Task 13")
++  }
++}
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun DAppBrowserStubScreen(
++  url: String = "",
++  onNavigateBack: () -> Unit = {},
++) {
++  Column(modifier = Modifier.fillMaxSize()) {
++    TopAppBar(
++      title = { Text("dApp Browser") },
++      navigationIcon = {
++        IconButton(onClick = onNavigateBack) {
++          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
++        }
++      },
++    )
++    StubContent("dApp Browser", "URL: $url\nWill be implemented in Task 10")
++  }
++}
++
++@Suppress("UNUSED_PARAMETER") // Parameter kept for navigation graph; will be used in Task 10
++@Composable
++fun DAppsTabScreen(onNavigateToBrowser: (String) -> Unit = {}) {
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(24.dp),
++    horizontalAlignment = Alignment.CenterHorizontally,
++    verticalArrangement = Arrangement.Center,
++  ) {
++    Icon(
++      Icons.Filled.Apps,
++      contentDescription = "dApps",
++      tint = MaterialTheme.colorScheme.onSurfaceVariant,
++      modifier = Modifier.padding(bottom = 16.dp),
++    )
++    Text(
++      text = "dApps Browser",
++      style = MaterialTheme.typography.headlineSmall,
++    )
++    Text(
++      text = "Browse decentralized applications.\nWill be implemented in Task 10.",
++      style = MaterialTheme.typography.bodyMedium,
++      color = MaterialTheme.colorScheme.onSurfaceVariant,
++      modifier = Modifier.padding(top = 8.dp),
++    )
++  }
++}
++
++/**
++ * Placeholder for the onboarding flow in the navigation graph.
++ * Will be replaced with real OnboardingScreen once ViewModels are wired via DI.
++ * The OnboardingScreen composable and OnboardingViewModel are fully implemented
++ * and tested; this placeholder exists only because the NavHost cannot yet
++ * provide the ViewModel dependencies without assisted injection setup.
++ */
++@Composable
++fun OnboardingPlaceholder(onNavigateToWallet: () -> Unit = {}) {
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(24.dp),
++    horizontalAlignment = Alignment.CenterHorizontally,
++    verticalArrangement = Arrangement.Center,
++  ) {
++    Text(
++      text = "MCW Wallet",
++      style = MaterialTheme.typography.headlineLarge,
++      fontWeight = FontWeight.Bold,
++    )
++    Text(
++      text = "Secure multi-currency wallet",
++      style = MaterialTheme.typography.bodyLarge,
++      color = MaterialTheme.colorScheme.onSurfaceVariant,
++      modifier = Modifier.padding(top = 8.dp, bottom = 48.dp),
++    )
++    Button(
++      onClick = onNavigateToWallet,
++      modifier = Modifier.fillMaxWidth(),
++    ) {
++      Text("Create Wallet")
++    }
++    Spacer(modifier = Modifier.height(16.dp))
++    OutlinedButton(
++      onClick = onNavigateToWallet,
++      modifier = Modifier.fillMaxWidth(),
++    ) {
++      Text("Import Wallet")
++    }
++  }
++}
++
++@Composable
++private fun StubContent(title: String, description: String) {
++  Column(
++    modifier = Modifier
++      .fillMaxSize()
++      .padding(24.dp),
++    horizontalAlignment = Alignment.CenterHorizontally,
++    verticalArrangement = Arrangement.Center,
++  ) {
++    Text(
++      text = title,
++      style = MaterialTheme.typography.headlineSmall,
++    )
++    Text(
++      text = description,
++      style = MaterialTheme.typography.bodyMedium,
++      color = MaterialTheme.colorScheme.onSurfaceVariant,
++      modifier = Modifier.padding(top = 8.dp),
++    )
++  }
++}
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletScreen.kt b/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletScreen.kt
+new file mode 100644
+index 000000000..3374d9ba4
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletScreen.kt
+@@ -0,0 +1,274 @@
++@file:OptIn(ExperimentalMaterialApi::class)
++
++package com.mcw.wallet.ui.wallet
++
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.items
++import androidx.compose.material.ExperimentalMaterialApi
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.automirrored.filled.Send
++import androidx.compose.material.icons.filled.History
++import androidx.compose.material.icons.filled.Settings
++import androidx.compose.material.icons.filled.WifiOff
++import androidx.compose.material.pullrefresh.PullRefreshIndicator
++import androidx.compose.material.pullrefresh.pullRefresh
++import androidx.compose.material.pullrefresh.rememberPullRefreshState
++import androidx.compose.material3.Card
++import androidx.compose.material3.CardDefaults
++import androidx.compose.material3.ExperimentalMaterial3Api
++import androidx.compose.material3.Icon
++import androidx.compose.material3.IconButton
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Text
++import androidx.compose.material3.TopAppBar
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import java.math.BigDecimal
++import java.text.SimpleDateFormat
++import java.util.Date
++import java.util.Locale
++
++/**
++ * Wallet screen displaying balance list with pull-to-refresh and offline mode banner.
++ *
++ * Uses state hoisting pattern: receives UI state and callbacks from the parent.
++ * The ViewModel is managed by the parent composable (WalletApp NavHost).
++ *
++ * Tech-spec Balance Display:
++ * - BTC (8 decimals), ETH/BNB/MATIC (18 decimals)
++ * - Zero balances show as "0.00" not empty
++ * - Pull-to-refresh triggers new API call
++ * - Offline: retain previous balances, show error banner, disable Send
++ *
++ * @param uiState the current wallet UI state
++ * @param onRefresh callback when user pulls to refresh
++ * @param onNavigateToSend callback for Send button
++ * @param onNavigateToHistory callback for History button
++ * @param onNavigateToSettings callback for Settings button
++ */
++@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
++@Composable
++fun WalletScreen(
++  uiState: WalletUiState = WalletUiState(),
++  onRefresh: () -> Unit = {},
++  onNavigateToSend: () -> Unit = {},
++  onNavigateToHistory: () -> Unit = {},
++  onNavigateToSettings: () -> Unit = {},
++) {
++  // Pull-to-refresh state
++  val pullRefreshState = rememberPullRefreshState(
++    refreshing = uiState.isLoading,
++    onRefresh = onRefresh,
++  )
++
++  Column(modifier = Modifier.fillMaxSize()) {
++    TopAppBar(
++      title = { Text("Wallet") },
++      actions = {
++        IconButton(onClick = onNavigateToHistory) {
++          Icon(Icons.Filled.History, contentDescription = "History")
++        }
++        IconButton(onClick = onNavigateToSettings) {
++          Icon(Icons.Filled.Settings, contentDescription = "Settings")
++        }
++      },
++    )
++
++    // Offline error banner
++    if (uiState.error != null) {
++      OfflineBanner(
++        message = uiState.error,
++        lastUpdated = uiState.lastUpdated,
++      )
++    }
++
++    // Balance list with pull-to-refresh
++    Box(
++      modifier = Modifier
++        .weight(1f)
++        .pullRefresh(pullRefreshState),
++    ) {
++      if (uiState.balances.isEmpty() && !uiState.isLoading) {
++        // Empty state
++        Box(
++          modifier = Modifier.fillMaxSize(),
++          contentAlignment = Alignment.Center,
++        ) {
++          Text(
++            text = "No balances to display",
++            style = MaterialTheme.typography.bodyLarge,
++            color = MaterialTheme.colorScheme.onSurfaceVariant,
++          )
++        }
++      } else {
++        LazyColumn(
++          modifier = Modifier
++            .fillMaxSize()
++            .padding(horizontal = 16.dp),
++          verticalArrangement = Arrangement.spacedBy(8.dp),
++        ) {
++          items(uiState.balances) { balance ->
++            BalanceCard(
++              balance = balance,
++              onSendClick = onNavigateToSend,
++              isSendDisabled = uiState.isSendDisabled,
++            )
++          }
++        }
++      }
++
++      PullRefreshIndicator(
++        refreshing = uiState.isLoading,
++        state = pullRefreshState,
++        modifier = Modifier.align(Alignment.TopCenter),
++      )
++    }
++  }
++}
++
++/**
++ * Offline mode banner displayed when balance fetch fails.
++ *
++ * Shows error message and "Last updated" timestamp if available.
++ * Tech-spec: "show 'No internet connection' error banner"
++ */
++@Composable
++private fun OfflineBanner(
++  message: String,
++  lastUpdated: Long?,
++) {
++  Card(
++    colors = CardDefaults.cardColors(
++      containerColor = MaterialTheme.colorScheme.errorContainer,
++    ),
++    modifier = Modifier
++      .fillMaxWidth()
++      .padding(horizontal = 16.dp, vertical = 8.dp),
++  ) {
++    Row(
++      modifier = Modifier.padding(16.dp),
++      verticalAlignment = Alignment.CenterVertically,
++    ) {
++      Icon(
++        Icons.Filled.WifiOff,
++        contentDescription = "Offline",
++        tint = MaterialTheme.colorScheme.onErrorContainer,
++        modifier = Modifier.size(24.dp),
++      )
++      Spacer(modifier = Modifier.width(12.dp))
++      Column {
++        Text(
++          text = message,
++          color = MaterialTheme.colorScheme.onErrorContainer,
++          style = MaterialTheme.typography.bodyMedium,
++        )
++        if (lastUpdated != null) {
++          val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
++          Text(
++            text = "Last updated: ${dateFormat.format(Date(lastUpdated))}",
++            color = MaterialTheme.colorScheme.onErrorContainer,
++            style = MaterialTheme.typography.bodySmall,
++          )
++        }
++      }
++    }
++  }
++}
++
++/**
++ * Balance card for a single currency showing balance and fiat value.
++ *
++ * @param balance the currency balance data
++ * @param onSendClick callback for the Send button
++ * @param isSendDisabled whether Send button is disabled (offline mode)
++ */
++@Composable
++private fun BalanceCard(
++  balance: CurrencyBalanceUi,
++  onSendClick: () -> Unit,
++  isSendDisabled: Boolean,
++) {
++  Card(
++    modifier = Modifier.fillMaxWidth(),
++  ) {
++    Row(
++      modifier = Modifier
++        .fillMaxWidth()
++        .padding(16.dp),
++      horizontalArrangement = Arrangement.SpaceBetween,
++      verticalAlignment = Alignment.CenterVertically,
++    ) {
++      Column(modifier = Modifier.weight(1f)) {
++        Text(
++          text = balance.currency,
++          style = MaterialTheme.typography.titleMedium,
++          fontWeight = FontWeight.Bold,
++        )
++        Spacer(modifier = Modifier.height(4.dp))
++        Text(
++          text = formatBalance(balance.balance, balance.decimals),
++          style = MaterialTheme.typography.bodyLarge,
++        )
++        if (balance.balanceUsd != null) {
++          Text(
++            text = "$${formatFiat(balance.balanceUsd)}",
++            style = MaterialTheme.typography.bodySmall,
++            color = MaterialTheme.colorScheme.onSurfaceVariant,
++          )
++        } else {
++          Text(
++            text = "N/A",
++            style = MaterialTheme.typography.bodySmall,
++            color = MaterialTheme.colorScheme.onSurfaceVariant,
++          )
++        }
++      }
++
++      IconButton(
++        onClick = onSendClick,
++        enabled = !isSendDisabled,
++      ) {
++        Icon(
++          Icons.AutoMirrored.Filled.Send,
++          contentDescription = "Send ${balance.currency}",
++        )
++      }
++    }
++  }
++}
++
++/**
++ * Formats a balance BigDecimal with appropriate precision.
++ * Zero balances display as "0.00" per spec: "Zero balances show as '0.00' not empty"
++ */
++private fun formatBalance(balance: BigDecimal, decimals: Int): String {
++  // Show at most 8 decimals for display, min 2
++  val displayDecimals = minOf(decimals, 8).coerceAtLeast(2)
++  return balance.setScale(displayDecimals, java.math.RoundingMode.HALF_UP).stripTrailingZeros()
++    .let { stripped ->
++      // Ensure at least 2 decimal places
++      if (stripped.scale() < 2) stripped.setScale(2) else stripped
++    }
++    .toPlainString()
++}
++
++/**
++ * Formats a fiat value to 2 decimal places.
++ */
++private fun formatFiat(value: BigDecimal): String {
++  return value.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()
++}
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletUiState.kt b/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletUiState.kt
+new file mode 100644
+index 000000000..b7e5e615a
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletUiState.kt
+@@ -0,0 +1,38 @@
++package com.mcw.wallet.ui.wallet
++
++import java.math.BigDecimal
++
++/**
++ * UI state for the Wallet screen.
++ *
++ * Holds in-memory balances (no persistent caching per Decision 8),
++ * loading state, offline error, and lastUpdated timestamp.
++ *
++ * @param balances list of currency balances (BTC, ETH, BNB, MATIC)
++ * @param isLoading true during a balance refresh
++ * @param error error message for offline banner, null when online
++ * @param isSendDisabled true when offline or no balances loaded
++ * @param lastUpdated epoch millis of last successful balance fetch, null if never loaded
++ */
++data class WalletUiState(
++  val balances: List<CurrencyBalanceUi> = emptyList(),
++  val isLoading: Boolean = false,
++  val error: String? = null,
++  val isSendDisabled: Boolean = true,
++  val lastUpdated: Long? = null,
++)
++
++/**
++ * Per-currency balance for UI display.
++ *
++ * @param currency symbol: "BTC", "ETH", "BNB", "MATIC"
++ * @param balance native balance (BTC units, ETH units, etc.)
++ * @param balanceUsd fiat equivalent in USD, null if price unavailable
++ * @param decimals display precision for formatting
++ */
++data class CurrencyBalanceUi(
++  val currency: String,
++  val balance: BigDecimal,
++  val balanceUsd: BigDecimal?,
++  val decimals: Int,
++)
+diff --git a/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletViewModel.kt b/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletViewModel.kt
+new file mode 100644
+index 000000000..9131ebfa1
+--- /dev/null
++++ b/android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletViewModel.kt
+@@ -0,0 +1,177 @@
++package com.mcw.wallet.ui.wallet
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import com.mcw.core.btc.BtcManager
++import com.mcw.core.evm.EvmManager
++import com.mcw.core.network.api.CoinGeckoApi
++import com.mcw.core.storage.SecureStorage
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.update
++import kotlinx.coroutines.launch
++import java.math.BigDecimal
++import java.math.RoundingMode
++
++/**
++ * Abstraction for fetching EVM balances.
++ * Decouples the ViewModel from web3j dependency (which lives in :core:evm).
++ * Production implementation wraps EvmManager + chain-specific Web3j instances.
++ * Test implementation is a simple mock.
++ */
++interface EvmBalanceFetcher {
++  /**
++   * Fetches the native balance for an address on a specific chain.
++   * @param address the EVM address
++   * @param currency the currency symbol (ETH, BNB, MATIC)
++   * @return balance in native units, or null on error
++   */
++  suspend fun fetchBalance(address: String, currency: String): BigDecimal?
++}
++
++/**
++ * ViewModel managing wallet balances with pull-to-refresh and offline mode.
++ *
++ * Balance display (from tech-spec Architecture "Balance display"):
++ * - On pull-to-refresh or screen open: parallel requests for BTC + EVM balances + fiat prices
++ * - Results displayed immediately as they arrive (no persistent caching)
++ * - In-memory StateFlow retains last successful balances with lastUpdated timestamp
++ * - Offline mode: retain previous balances, show "No internet connection" error banner,
++ *   disable Send button
++ * - Network restored: auto-refresh on next pull-to-refresh
++ *
++ * Supported currencies: BTC (8 decimals), ETH/BNB/MATIC (18 decimals)
++ *
++ * Note: This ViewModel is not @HiltViewModel because it requires runtime parameters
++ * (btcAddress, ethAddress) that come from SecureStorage after wallet creation.
++ * In production, use a ViewModelProvider.Factory or assisted injection.
++ */
++class WalletViewModel(
++  private val btcManager: BtcManager,
++  private val evmManager: EvmManager,
++  private val secureStorage: SecureStorage,
++  private val coinGeckoApi: CoinGeckoApi,
++  val btcAddress: String = "",
++  val ethAddress: String = "",
++) : ViewModel() {
++
++  companion object {
++    /** Supported currencies in display order */
++    val CURRENCIES = listOf(
++      CurrencyConfig("BTC", 8),
++      CurrencyConfig("ETH", 18),
++      CurrencyConfig("BNB", 18),
++      CurrencyConfig("MATIC", 18),
++    )
++  }
++
++  /**
++   * EVM balance fetcher, set by the DI layer or test.
++   * Decouples ViewModel from web3j (which lives in :core:evm module).
++   */
++  var evmBalanceFetcher: EvmBalanceFetcher? = null
++
++  private val _uiState = MutableStateFlow(WalletUiState())
++  val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()
++
++  /**
++   * Refreshes all balances from network.
++   *
++   * Fetches BTC balance (Bitpay), EVM balances (eth_getBalance per chain),
++   * and fiat prices (CoinGecko) in parallel. On any failure, retains previous
++   * balances and shows error banner.
++   */
++  fun refreshBalances() {
++    viewModelScope.launch {
++      _uiState.update { it.copy(isLoading = true, error = null) }
++
++      var hasError = false
++      val newBalances = mutableMapOf<String, BigDecimal>()
++
++      // Fetch BTC balance
++      try {
++        val btcBalance = btcManager.fetchBalance(btcAddress)
++        newBalances["BTC"] = btcBalance.balance
++      } catch (e: Exception) {
++        hasError = true
++      }
++
++      // Fetch EVM balances (ETH, BNB, MATIC share the same address)
++      val fetcher = evmBalanceFetcher
++      for (currency in listOf("ETH", "BNB", "MATIC")) {
++        try {
++          if (fetcher != null) {
++            val balance = fetcher.fetchBalance(ethAddress, currency)
++            if (balance != null) {
++              newBalances[currency] = balance
++            } else {
++              hasError = true
++            }
++          } else {
++            hasError = true
++          }
++        } catch (e: Exception) {
++          hasError = true
++        }
++      }
++
++      // Fetch fiat prices
++      val prices = try {
++        evmManager.fetchFiatPrices(
++          coinGeckoApi,
++          CURRENCIES.map { it.symbol }
++        )
++      } catch (e: Exception) {
++        hasError = true
++        null
++      }
++
++      // Build UI balance list
++      val previousBalances = _uiState.value.balances
++      val balanceList = CURRENCIES.map { config ->
++        val balance = newBalances[config.symbol]
++          ?: previousBalances.find { it.currency == config.symbol }?.balance
++          ?: BigDecimal.ZERO
++
++        val fiatPrice = prices?.get(config.symbol)
++        val balanceUsd = if (fiatPrice != null) {
++          balance.multiply(fiatPrice).setScale(2, RoundingMode.HALF_UP)
++        } else {
++          null
++        }
++
++        CurrencyBalanceUi(
++          currency = config.symbol,
++          balance = balance,
++          balanceUsd = balanceUsd,
++          decimals = config.decimals,
++        )
++      }
++
++      val now = System.currentTimeMillis()
++      val hasAnyNewData = newBalances.isNotEmpty()
++
++      _uiState.update { current ->
++        current.copy(
++          balances = balanceList,
++          isLoading = false,
++          error = if (hasError && !hasAnyNewData) "Failed to load balances. Check your internet connection." else null,
++          isSendDisabled = hasError && !hasAnyNewData,
++          lastUpdated = if (hasAnyNewData) now else current.lastUpdated,
++        )
++      }
++    }
++  }
++}
++
++/**
++ * Configuration for a supported currency.
++ *
++ * @param symbol currency symbol (BTC, ETH, BNB, MATIC)
++ * @param decimals display precision
++ */
++data class CurrencyConfig(
++  val symbol: String,
++  val decimals: Int,
++)
+diff --git a/android/app/src/test/java/com/mcw/wallet/ui/onboarding/OnboardingViewModelTest.kt b/android/app/src/test/java/com/mcw/wallet/ui/onboarding/OnboardingViewModelTest.kt
+new file mode 100644
+index 000000000..5f22ab654
+--- /dev/null
++++ b/android/app/src/test/java/com/mcw/wallet/ui/onboarding/OnboardingViewModelTest.kt
+@@ -0,0 +1,362 @@
++package com.mcw.wallet.ui.onboarding
++
++import com.mcw.core.crypto.CryptoManager
++import com.mcw.core.crypto.MnemonicException
++import com.mcw.core.crypto.WalletKeys
++import com.mcw.core.storage.SecureStorage
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.test.StandardTestDispatcher
++import kotlinx.coroutines.test.advanceUntilIdle
++import kotlinx.coroutines.test.resetMain
++import kotlinx.coroutines.test.runTest
++import kotlinx.coroutines.test.setMain
++import org.junit.After
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertNotNull
++import org.junit.Assert.assertTrue
++import org.junit.Before
++import org.junit.Test
++import org.mockito.kotlin.any
++import org.mockito.kotlin.mock
++import org.mockito.kotlin.never
++import org.mockito.kotlin.verify
++import org.mockito.kotlin.whenever
++
++/**
++ * Unit tests for OnboardingViewModel — seed confirmation retry logic,
++ * password validation, and wallet creation/import flows.
++ *
++ * TDD anchors from task 8:
++ * - testSeedConfirmationRetry — wrong words -> retry (up to 3 attempts)
++ * - testSeedConfirmationReset — 3 failures -> show all 12 words again, reset counter
++ * - testPasswordValidation — 8+ chars -> valid, 7 chars -> error
++ */
++@OptIn(ExperimentalCoroutinesApi::class)
++class OnboardingViewModelTest {
++
++  private val testDispatcher = StandardTestDispatcher()
++  private lateinit var cryptoManager: CryptoManager
++  private lateinit var secureStorage: SecureStorage
++  private lateinit var viewModel: OnboardingViewModel
++
++  private val testMnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
++  private val testWords = testMnemonic.split(" ")
++  private val testWalletKeys = WalletKeys(
++    mnemonic = testWords,
++    btcPrivateKeyWIF = "L1RzGGsYw7iFocm9v4gLPihmTJagbBwRaApK1KnDCqeFE7GEDhsz",
++    btcAddress = "1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA",
++    ethPrivateKeyHex = "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727",
++    ethAddress = "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
++  )
++
++  @Before
++  fun setUp() {
++    Dispatchers.setMain(testDispatcher)
++    cryptoManager = mock()
++    secureStorage = mock()
++    whenever(cryptoManager.generateMnemonic()).thenReturn(testMnemonic)
++    whenever(cryptoManager.deriveKeys(any())).thenReturn(testWalletKeys)
++
++    viewModel = OnboardingViewModel(cryptoManager, secureStorage)
++  }
++
++  @After
++  fun tearDown() {
++    Dispatchers.resetMain()
++  }
++
++  // --- Seed Confirmation Retry Tests ---
++
++  @Test
++  fun `testSeedConfirmationRetry - wrong words increment attempt counter`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertTrue("Should be in mnemonic display state", state is OnboardingUiState.MnemonicDisplay)
++
++    // Move to confirmation
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    val confirmState = viewModel.uiState.value
++    assertTrue("Should be in seed confirmation state", confirmState is OnboardingUiState.SeedConfirmation)
++    val seedConfirm = confirmState as OnboardingUiState.SeedConfirmation
++    assertEquals("Initial attempt should be 0", 0, seedConfirm.attemptCount)
++
++    // Submit wrong words
++    val wrongAnswers = seedConfirm.challengeIndices.associate { it to "wrong" }
++    viewModel.submitSeedConfirmation(wrongAnswers)
++    advanceUntilIdle()
++
++    val afterFirst = viewModel.uiState.value
++    assertTrue("Should still be in seed confirmation", afterFirst is OnboardingUiState.SeedConfirmation)
++    val afterFirstConfirm = afterFirst as OnboardingUiState.SeedConfirmation
++    assertEquals("Attempt should be 1 after first failure", 1, afterFirstConfirm.attemptCount)
++    assertNotNull("Should have error message", afterFirstConfirm.error)
++  }
++
++  @Test
++  fun `testSeedConfirmationRetry - correct words proceed to password`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    val confirmState = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    // Submit correct words
++    val correctAnswers = confirmState.challengeIndices.associate { idx -> idx to testWords[idx] }
++    viewModel.submitSeedConfirmation(correctAnswers)
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertTrue("Should move to password screen", state is OnboardingUiState.SetPassword)
++  }
++
++  @Test
++  fun `testSeedConfirmationRetry - second wrong attempt increments to 2`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    val confirmState = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    val wrongAnswers = confirmState.challengeIndices.associate { it to "wrong" }
++
++    // First failed attempt
++    viewModel.submitSeedConfirmation(wrongAnswers)
++    advanceUntilIdle()
++
++    // Second failed attempt
++    val state2 = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    val wrongAnswers2 = state2.challengeIndices.associate { it to "invalid" }
++    viewModel.submitSeedConfirmation(wrongAnswers2)
++    advanceUntilIdle()
++
++    val afterSecond = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    assertEquals("Attempt should be 2 after second failure", 2, afterSecond.attemptCount)
++  }
++
++  // --- Seed Confirmation Reset Tests ---
++
++  @Test
++  fun `testSeedConfirmationReset - 3 failures reset to mnemonic display`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    // Fail 3 times
++    for (i in 0 until 3) {
++      val state = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++      val wrongAnswers = state.challengeIndices.associate { it to "wrong" }
++      viewModel.submitSeedConfirmation(wrongAnswers)
++      advanceUntilIdle()
++    }
++
++    val resetState = viewModel.uiState.value
++    assertTrue(
++      "Should reset to mnemonic display after 3 failures",
++      resetState is OnboardingUiState.MnemonicDisplay
++    )
++    // Mnemonic should be the same (not re-generated)
++    val display = resetState as OnboardingUiState.MnemonicDisplay
++    assertEquals("Mnemonic should be preserved after reset", testWords, display.words)
++  }
++
++  @Test
++  fun `testSeedConfirmationReset - after reset, attempt counter resets to 0`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    // Fail 3 times to trigger reset
++    for (i in 0 until 3) {
++      val state = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++      val wrongAnswers = state.challengeIndices.associate { it to "wrong" }
++      viewModel.submitSeedConfirmation(wrongAnswers)
++      advanceUntilIdle()
++    }
++
++    // Should be back at mnemonic display
++    assertTrue(viewModel.uiState.value is OnboardingUiState.MnemonicDisplay)
++
++    // Move to confirmation again
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    val newConfirm = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    assertEquals("Attempt counter should be 0 after reset", 0, newConfirm.attemptCount)
++  }
++
++  // --- Password Validation Tests ---
++
++  @Test
++  fun `testPasswordValidation - 8 chars is valid`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    // Pass seed confirmation
++    val confirmState = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    val correctAnswers = confirmState.challengeIndices.associate { idx -> idx to testWords[idx] }
++    viewModel.submitSeedConfirmation(correctAnswers)
++    advanceUntilIdle()
++
++    // Set valid password
++    viewModel.setPassword("abcd1234", "abcd1234")
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertTrue("Should complete wallet creation with valid password", state is OnboardingUiState.Complete)
++  }
++
++  @Test
++  fun `testPasswordValidation - 7 chars shows error`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    // Pass seed confirmation
++    val confirmState = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    val correctAnswers = confirmState.challengeIndices.associate { idx -> idx to testWords[idx] }
++    viewModel.submitSeedConfirmation(correctAnswers)
++    advanceUntilIdle()
++
++    // Try short password
++    viewModel.setPassword("abc1234", "abc1234")
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertTrue("Should stay on password screen", state is OnboardingUiState.SetPassword)
++    val pwState = state as OnboardingUiState.SetPassword
++    assertNotNull("Should have error message", pwState.error)
++    assertTrue(
++      "Error should mention minimum length",
++      pwState.error!!.contains("8")
++    )
++  }
++
++  @Test
++  fun `testPasswordValidation - mismatched passwords shows error`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    // Pass seed confirmation
++    val confirmState = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    val correctAnswers = confirmState.challengeIndices.associate { idx -> idx to testWords[idx] }
++    viewModel.submitSeedConfirmation(correctAnswers)
++    advanceUntilIdle()
++
++    // Mismatched passwords
++    viewModel.setPassword("abcd1234", "abcd5678")
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value as OnboardingUiState.SetPassword
++    assertNotNull("Should have error for mismatch", state.error)
++    assertTrue(
++      "Error should mention passwords not matching",
++      state.error!!.contains("match", ignoreCase = true)
++    )
++  }
++
++  // --- Import Wallet Tests ---
++
++  @Test
++  fun `import valid mnemonic proceeds to password screen`() = runTest {
++    whenever(cryptoManager.validateMnemonic(testMnemonic)).thenReturn(true)
++
++    viewModel.importMnemonic(testMnemonic)
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertTrue("Should move to password screen after valid import", state is OnboardingUiState.SetPassword)
++  }
++
++  @Test
++  fun `import invalid mnemonic shows error`() = runTest {
++    // Use thenAnswer instead of thenThrow to avoid Mockito's checked exception validation
++    whenever(cryptoManager.validateMnemonic("invalid words"))
++      .thenAnswer { throw MnemonicException("Invalid word count: expected 12, got 2") }
++
++    viewModel.importMnemonic("invalid words")
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertTrue("Should be in import state with error", state is OnboardingUiState.ImportWallet)
++    val importState = state as OnboardingUiState.ImportWallet
++    assertNotNull("Should have error", importState.error)
++  }
++
++  // --- Wallet Creation Saves Keys ---
++
++  @Test
++  fun `wallet creation saves mnemonic and keys to storage`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    val confirmState = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    val correctAnswers = confirmState.challengeIndices.associate { idx -> idx to testWords[idx] }
++    viewModel.submitSeedConfirmation(correctAnswers)
++    advanceUntilIdle()
++
++    viewModel.setPassword("abcd1234", "abcd1234")
++    advanceUntilIdle()
++
++    verify(secureStorage).saveMnemonic(testWords)
++    verify(secureStorage).savePrivateKeys(testWalletKeys.btcPrivateKeyWIF, testWalletKeys.ethPrivateKeyHex)
++    verify(secureStorage).savePasswordHash(any())
++  }
++
++  // --- Challenge Indices ---
++
++  @Test
++  fun `seed confirmation generates exactly 3 challenge indices`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    assertEquals("Should have exactly 3 challenge indices", 3, state.challengeIndices.size)
++    assertTrue(
++      "All indices should be in 0..11",
++      state.challengeIndices.all { it in 0..11 }
++    )
++    assertEquals(
++      "All indices should be unique",
++      state.challengeIndices.size,
++      state.challengeIndices.toSet().size
++    )
++  }
++
++  // --- Trimming whitespace in seed confirmation ---
++
++  @Test
++  fun `seed confirmation trims whitespace from answers`() = runTest {
++    viewModel.generateMnemonic()
++    advanceUntilIdle()
++    viewModel.onMnemonicConfirmed()
++    advanceUntilIdle()
++
++    val confirmState = viewModel.uiState.value as OnboardingUiState.SeedConfirmation
++    // Submit correct words with extra whitespace
++    val correctAnswersWithSpaces = confirmState.challengeIndices.associate { idx ->
++      idx to "  ${testWords[idx]}  "
++    }
++    viewModel.submitSeedConfirmation(correctAnswersWithSpaces)
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertTrue("Should accept trimmed answers", state is OnboardingUiState.SetPassword)
++  }
++}
+diff --git a/android/app/src/test/java/com/mcw/wallet/ui/wallet/WalletViewModelTest.kt b/android/app/src/test/java/com/mcw/wallet/ui/wallet/WalletViewModelTest.kt
+new file mode 100644
+index 000000000..6ddce9941
+--- /dev/null
++++ b/android/app/src/test/java/com/mcw/wallet/ui/wallet/WalletViewModelTest.kt
+@@ -0,0 +1,292 @@
++package com.mcw.wallet.ui.wallet
++
++import com.mcw.core.btc.BtcBalance
++import com.mcw.core.btc.BtcManager
++import com.mcw.core.evm.EvmManager
++import com.mcw.core.network.api.CoinGeckoApi
++import com.mcw.core.storage.SecureStorage
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.test.StandardTestDispatcher
++import kotlinx.coroutines.test.advanceUntilIdle
++import kotlinx.coroutines.test.resetMain
++import kotlinx.coroutines.test.runTest
++import kotlinx.coroutines.test.setMain
++import org.junit.After
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertNotNull
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertTrue
++import org.junit.Before
++import org.junit.Test
++import org.mockito.kotlin.any
++import org.mockito.kotlin.doAnswer
++import org.mockito.kotlin.doReturn
++import org.mockito.kotlin.eq
++import org.mockito.kotlin.mock
++import org.mockito.kotlin.reset
++import org.mockito.kotlin.times
++import org.mockito.kotlin.verify
++import org.mockito.kotlin.whenever
++import java.math.BigDecimal
++
++/**
++ * Unit tests for WalletViewModel -- balance refresh, offline mode state.
++ *
++ * TDD anchors from task 8:
++ * - testBalanceRefresh -- pull-to-refresh triggers new API call
++ * - testOfflineModeState -- API error -> show error banner, disable Send button
++ */
++@OptIn(ExperimentalCoroutinesApi::class)
++class WalletViewModelTest {
++
++  private val testDispatcher = StandardTestDispatcher()
++  private lateinit var btcManager: BtcManager
++  private lateinit var evmManager: EvmManager
++  private lateinit var secureStorage: SecureStorage
++  private lateinit var coinGeckoApi: CoinGeckoApi
++  private lateinit var evmBalanceFetcher: EvmBalanceFetcher
++
++  private val testBtcAddress = "1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA"
++  private val testEthAddress = "0x9858EfFD232B4033E47d90003D41EC34EcaEda94"
++
++  @Before
++  fun setUp() {
++    Dispatchers.setMain(testDispatcher)
++    btcManager = mock()
++    evmManager = mock()
++    secureStorage = mock()
++    coinGeckoApi = mock()
++    evmBalanceFetcher = mock()
++
++    whenever(secureStorage.hasWallet()).thenReturn(true)
++  }
++
++  @After
++  fun tearDown() {
++    Dispatchers.resetMain()
++  }
++
++  private fun createViewModel(): WalletViewModel {
++    val vm = WalletViewModel(
++      btcManager = btcManager,
++      evmManager = evmManager,
++      secureStorage = secureStorage,
++      coinGeckoApi = coinGeckoApi,
++      btcAddress = testBtcAddress,
++      ethAddress = testEthAddress,
++    )
++    vm.evmBalanceFetcher = evmBalanceFetcher
++    return vm
++  }
++
++  // --- Balance Refresh Tests ---
++
++  @Test
++  fun `testBalanceRefresh - pull-to-refresh triggers new API call`() = runTest {
++    val btcBalance = BtcBalance(
++      balance = BigDecimal("1.50000000"),
++      unconfirmed = BigDecimal.ZERO
++    )
++    whenever(btcManager.fetchBalance(testBtcAddress)).thenReturn(btcBalance)
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(BigDecimal("2.5"))
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(
++      mapOf("BTC" to BigDecimal("50000"), "ETH" to BigDecimal("3000"))
++    )
++
++    val viewModel = createViewModel()
++
++    // First refresh
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertFalse("Should not be loading after refresh", state.isLoading)
++    assertNotNull("Should have BTC balance", state.balances.find { it.currency == "BTC" })
++
++    val btcEntry = state.balances.first { it.currency == "BTC" }
++    assertEquals("BTC balance should be 1.5", 0, BigDecimal("1.50000000").compareTo(btcEntry.balance))
++
++    // Second refresh triggers new API call
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    verify(btcManager, times(2)).fetchBalance(testBtcAddress)
++  }
++
++  @Test
++  fun `testBalanceRefresh - isLoading transitions correctly`() = runTest {
++    whenever(btcManager.fetchBalance(testBtcAddress)).thenReturn(
++      BtcBalance(BigDecimal("1.0"), BigDecimal.ZERO)
++    )
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(BigDecimal("2.0"))
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(emptyMap())
++
++    val viewModel = createViewModel()
++
++    // Before refresh, isLoading should be false
++    assertFalse("Should not be loading initially", viewModel.uiState.value.isLoading)
++
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    // After refresh completes, isLoading should be false
++    assertFalse("Should not be loading after refresh completes", viewModel.uiState.value.isLoading)
++
++    // Verify balances were loaded (confirming refresh happened)
++    assertTrue("Should have balances", viewModel.uiState.value.balances.isNotEmpty())
++  }
++
++  // --- Offline Mode Tests ---
++
++  @Test
++  fun `testOfflineModeState - API error shows error banner`() = runTest {
++    doAnswer { throw RuntimeException("Network error") }
++      .whenever(btcManager).fetchBalance(testBtcAddress)
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(null)
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(null)
++
++    val viewModel = createViewModel()
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertNotNull("Should have error message", state.error)
++    assertTrue("Send should be disabled", state.isSendDisabled)
++  }
++
++  @Test
++  fun `testOfflineModeState - retains previous balances on network error`() = runTest {
++    val btcBalance = BtcBalance(BigDecimal("1.0"), BigDecimal.ZERO)
++    whenever(btcManager.fetchBalance(testBtcAddress)).thenReturn(btcBalance)
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(BigDecimal("2.0"))
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(emptyMap())
++
++    val viewModel = createViewModel()
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    // Verify balances loaded
++    val loadedState = viewModel.uiState.value
++    assertTrue("Should have balances", loadedState.balances.isNotEmpty())
++    assertFalse("Send should be enabled with balances", loadedState.isSendDisabled)
++
++    // Now simulate network failure: use reset + doAnswer to avoid re-stubbing issue
++    reset(btcManager)
++    doAnswer { throw RuntimeException("Network error") }
++      .whenever(btcManager).fetchBalance(testBtcAddress)
++    reset(evmBalanceFetcher)
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(null)
++
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    val offlineState = viewModel.uiState.value
++    assertTrue("Should retain previous balances", offlineState.balances.isNotEmpty())
++    // BTC balance should still be 1.0 from previous fetch
++    val btcEntry = offlineState.balances.first { it.currency == "BTC" }
++    assertEquals("Previous BTC balance retained", 0, BigDecimal("1.0").compareTo(btcEntry.balance))
++    assertNotNull("Should have lastUpdated timestamp", offlineState.lastUpdated)
++  }
++
++  @Test
++  fun `testOfflineModeState - network restored clears error`() = runTest {
++    // First: fail
++    doAnswer { throw RuntimeException("Network error") }
++      .whenever(btcManager).fetchBalance(testBtcAddress)
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(null)
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(null)
++
++    val viewModel = createViewModel()
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    assertTrue("Should have error", viewModel.uiState.value.error != null)
++
++    // Now: succeed — use reset to clear the previous thenAnswer stub
++    reset(btcManager)
++    doReturn(BtcBalance(BigDecimal("1.0"), BigDecimal.ZERO))
++      .whenever(btcManager).fetchBalance(testBtcAddress)
++    reset(evmBalanceFetcher)
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(BigDecimal("2.0"))
++    reset(evmManager)
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(emptyMap())
++
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    assertNull("Error should be cleared after successful refresh", state.error)
++    assertFalse("Send should be re-enabled", state.isSendDisabled)
++  }
++
++  // --- Zero Balance Display ---
++
++  @Test
++  fun `zero balances show as 0 not empty`() = runTest {
++    whenever(btcManager.fetchBalance(testBtcAddress)).thenReturn(
++      BtcBalance(BigDecimal.ZERO, BigDecimal.ZERO)
++    )
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(BigDecimal.ZERO)
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(emptyMap())
++
++    val viewModel = createViewModel()
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    // Should have 4 currency entries even with zero balances
++    assertTrue("Should have at least 4 currencies", state.balances.size >= 4)
++    state.balances.forEach { entry ->
++      assertEquals(
++        "${entry.currency} should have zero balance",
++        0,
++        BigDecimal.ZERO.compareTo(entry.balance)
++      )
++    }
++  }
++
++  // --- Fiat Price Display ---
++
++  @Test
++  fun `fiat prices populated when available`() = runTest {
++    whenever(btcManager.fetchBalance(testBtcAddress)).thenReturn(
++      BtcBalance(BigDecimal("1.5"), BigDecimal.ZERO)
++    )
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(BigDecimal("2.0"))
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(
++      mapOf("BTC" to BigDecimal("50000"), "ETH" to BigDecimal("3000"))
++    )
++
++    val viewModel = createViewModel()
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    val btcEntry = state.balances.first { it.currency == "BTC" }
++    assertNotNull("BTC should have fiat value", btcEntry.balanceUsd)
++    assertEquals(
++      "BTC fiat value should be 75000",
++      0,
++      BigDecimal("75000.00").compareTo(btcEntry.balanceUsd)
++    )
++  }
++
++  @Test
++  fun `fiat prices null when API unavailable`() = runTest {
++    whenever(btcManager.fetchBalance(testBtcAddress)).thenReturn(
++      BtcBalance(BigDecimal("1.0"), BigDecimal.ZERO)
++    )
++    whenever(evmBalanceFetcher.fetchBalance(eq(testEthAddress), any())).thenReturn(BigDecimal("2.0"))
++    whenever(evmManager.fetchFiatPrices(eq(coinGeckoApi), any())).thenReturn(null)
++
++    val viewModel = createViewModel()
++    viewModel.refreshBalances()
++    advanceUntilIdle()
++
++    val state = viewModel.uiState.value
++    val btcEntry = state.balances.first { it.currency == "BTC" }
++    assertNull("BTC fiat value should be null when API unavailable", btcEntry.balanceUsd)
++  }
++}

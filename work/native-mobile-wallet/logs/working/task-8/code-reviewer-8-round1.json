@@ -1,0 +1,38 @@
+{
+  "reviewer": "code-reviewer-8",
+  "task": 8,
+  "round": 1,
+  "commit": "bef60aeac",
+  "verdict": "approve_with_comments",
+  "findings": [
+    {
+      "severity": "low",
+      "file": "android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletViewModel.kt",
+      "line": 73,
+      "description": "evmBalanceFetcher is a public mutable var. Consider making it private with a setter or using constructor injection to prevent external mutation after initialization.",
+      "suggestion": "Change to: var evmBalanceFetcher: EvmBalanceFetcher? = null; internal set"
+    },
+    {
+      "severity": "info",
+      "file": "android/app/src/main/java/com/mcw/wallet/ui/navigation/NavRoutes.kt",
+      "line": 13,
+      "description": "NavRoutes.CREATE_WALLET, SEED_CONFIRMATION, IMPORT_WALLET, SET_PASSWORD are defined but not used as NavHost destinations (onboarding is a single composable). These are dead constants.",
+      "suggestion": "Remove unused route constants or add a TODO comment explaining they will be used when onboarding is split into separate nav destinations."
+    },
+    {
+      "severity": "info",
+      "file": "android/app/src/main/java/com/mcw/wallet/ui/onboarding/OnboardingViewModel.kt",
+      "line": 162,
+      "description": "BCrypt.gensalt(12) is called on the main thread inside setPassword(). For production use, this should be moved to a coroutine on Dispatchers.Default since bcrypt cost 12 can take ~250ms.",
+      "suggestion": "Consider wrapping the password hashing in a coroutine in a future task when the ViewModel lifecycle is wired properly."
+    },
+    {
+      "severity": "info",
+      "file": "android/app/src/main/java/com/mcw/wallet/ui/wallet/WalletScreen.kt",
+      "line": 1,
+      "description": "Using deprecated ExperimentalMaterialApi pullRefresh. This is acceptable given BOM 2024.02.00 constraint but should be migrated to Material3 PullToRefreshBox when BOM is upgraded.",
+      "suggestion": "Add TODO comment noting the migration target."
+    }
+  ],
+  "summary": "Clean implementation. Architecture decisions (state hoisting for WalletScreen, EvmBalanceFetcher abstraction, OnboardingPlaceholder) are reasonable given the DI constraints. One low finding (mutable var visibility) and three informational items. Approve with comments."
+}

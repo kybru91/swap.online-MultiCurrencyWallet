@@ -10,6 +10,8 @@ package com.mcw.wallet.ui.navigation
 object NavRoutes {
   // Onboarding flow
   const val ONBOARDING = "onboarding"
+  // TODO: These routes will be used when onboarding is split into separate
+  // NavHost destinations (currently onboarding is a single composable with internal state)
   const val CREATE_WALLET = "create_wallet"
   const val SEED_CONFIRMATION = "seed_confirmation"
   const val IMPORT_WALLET = "import_wallet"

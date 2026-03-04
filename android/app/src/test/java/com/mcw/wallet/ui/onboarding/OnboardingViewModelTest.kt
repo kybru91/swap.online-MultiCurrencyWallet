@@ -19,6 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -314,7 +315,14 @@ class OnboardingViewModelTest {
 
     verify(secureStorage).saveMnemonic(testWords)
     verify(secureStorage).savePrivateKeys(testWalletKeys.btcPrivateKeyWIF, testWalletKeys.ethPrivateKeyHex)
-    verify(secureStorage).savePasswordHash(any())
+
+    // Verify bcrypt hash format: $2a$12$ prefix (cost factor 12)
+    val hashCaptor = argumentCaptor<String>()
+    verify(secureStorage).savePasswordHash(hashCaptor.capture())
+    assertTrue(
+      "Password hash should start with \$2a\$12\$ (bcrypt cost 12)",
+      hashCaptor.firstValue.startsWith("\$2a\$12\$")
+    )
   }
 
   // --- Challenge Indices ---

@@ -69,8 +69,10 @@ class WalletViewModel(
   /**
    * EVM balance fetcher, set by the DI layer or test.
    * Decouples ViewModel from web3j (which lives in :core:evm module).
+   * Internal setter prevents external mutation after initialization.
    */
   var evmBalanceFetcher: EvmBalanceFetcher? = null
+    internal set
 
   private val _uiState = MutableStateFlow(WalletUiState())
   val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()

@@ -1,3 +1,5 @@
+// TODO: Migrate from compose-material pullRefresh to Material3 PullToRefreshBox
+// when BOM is upgraded from 2024.02.00 to 2024.09.00+
 @file:OptIn(ExperimentalMaterialApi::class)
 
 package com.mcw.wallet.ui.wallet

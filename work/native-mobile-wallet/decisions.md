@@ -197,3 +197,27 @@ All actionable findings addressed in fix commit 3def5621d.
 - Seed confirmation: 3 failures reset to mnemonic display, attempt counter resets to 0
 - Offline mode: retain previous balances, show error banner, disable Send, clear on reconnect
 - Password validation: 8+ chars required, mismatch detected, bcrypt $2a$12$ hash verified
+
+## Task 11: WalletConnect v2 Integration
+
+**Status:** Done
+**Commit:** d88a618c9, 2b37b9ac3
+**Agent:** walletconnect-engineer
+**Summary:** Implemented WalletConnect v2 wallet-side SDK integration in :feature:walletconnect with URI parsing (no Android framework dependency for testability), relay server validation (only relay.walletconnect.com / relay.walletconnect.org), session lifecycle management (pair, approve, reject, remove), 24-hour session expiry with cleanup on app launch, JSON serialization via org.json, and TimeProvider abstraction for deterministic testing. 66 unit tests cover all 5 TDD anchors.
+**Deviations:** None. Relay validation, session expiry (24h), persistence via SecureStorage, and error handling all match tech-spec exactly.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer: 2 low findings (stale KDoc reference, redundant validation), 2 info -> [logs/working/task-11/code-reviewer-11-round1.json]
+- security-auditor: OK (4 info, no vulnerabilities) -> [logs/working/task-11/security-auditor-11-round1.json]
+- test-reviewer: OK (4 info, all TDD anchors pass) -> [logs/working/task-11/test-reviewer-11-round1.json]
+
+*Round 2 (after fixes):*
+- code-reviewer: OK -> [logs/working/task-11/code-reviewer-11-round2.json]
+
+**Verification:**
+- `./gradlew :feature:walletconnect:test` -> BUILD SUCCESSFUL, 66 tests passed (debug + release, 0 failures)
+- Session expiry: 25h old session removed, 23h59m retained, exactly 24h removed
+- Relay validation: walletconnect.com allowed, custom.relay.com rejected, subdomain attacks rejected
+- Persistence: approve session -> restart -> session restored from EncryptedSharedPreferences

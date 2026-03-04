@@ -222,6 +222,29 @@ All actionable findings addressed in fix commit 3def5621d.
 - Relay validation: walletconnect.com allowed, custom.relay.com rejected, subdomain attacks rejected
 - Persistence: approve session -> restart -> session restored from EncryptedSharedPreferences
 
+## Task 9: Send Transaction UI
+
+**Status:** Done
+**Commit:** d96b35c1d, 71a46b7da
+**Agent:** send-engineer
+**Summary:** Implemented send transaction screen replacing SendStubScreen with full flow: SendViewModel state machine (Idle -> Building -> Confirming -> Submitting -> Success/Error), address validation (BTC P2PKH regex + EVM EIP-55 checksum warning), amount validation (> 0, <= balance), fee tier selector (BTC: Blockcypher fast/normal/slow sat/KB, EVM: 1.5x/1.0x/0.8x gas price multipliers), duplicate submission prevention (button disabled during Submitting state), and ConfirmationDialog composable. Introduced EvmSendHelper and AddressChecksumProvider interfaces to decouple app module from web3j dependency (same pattern as WalletViewModel's EvmBalanceFetcher). DefaultAddressChecksumProvider implements EIP-55 using BouncyCastle's KeccakDigest.
+**Deviations:** BiometricPrompt integration point defined (confirmSend called after biometric success) but actual BiometricPrompt trigger is deferred to Activity layer since core:auth's AuthManager is still a placeholder. Added self-send prevention (not in original spec but critical for fund safety).
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer-9: 3 findings (unused param, self-send, bounds check), all fixed -> [logs/working/task-9/code-reviewer-9-round1.json]
+- security-auditor-9: 1 finding (self-send prevention), fixed -> [logs/working/task-9/security-auditor-9-round1.json]
+- test-reviewer-9: OK (42/42 tests pass, all TDD anchors covered) -> [logs/working/task-9/test-reviewer-9-round1.json]
+
+**Verification:**
+- `./gradlew :app:testDebugUnitTest` -> BUILD SUCCESSFUL, 64 tests passed (42 send + 13 onboarding + 8 wallet + 1 smoke)
+- `./gradlew :app:lintDebug` -> BUILD SUCCESSFUL, 0 errors
+- Address validation: BTC P2PKH 26-35 chars alphanumeric, EVM 0x+40 hex with EIP-55 checksum
+- State machine: Idle -> Building -> Confirming -> Submitting -> Success (BTC + EVM paths tested)
+- Duplicate prevention: isSubmitting=true during broadcast, re-enabled on error
+- Self-send prevention: "Cannot send to your own address" error for same-address send
+
 ## Task 10: dApp Browser + window.ethereum EIP-1193 Provider
 
 **Status:** Done

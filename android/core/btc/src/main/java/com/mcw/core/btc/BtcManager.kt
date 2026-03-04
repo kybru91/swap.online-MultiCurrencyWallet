@@ -11,7 +11,6 @@ import org.bitcoinj.core.Sha256Hash
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.core.TransactionOutPoint
 import org.bitcoinj.params.MainNetParams
-import org.bitcoinj.script.ScriptBuilder
 import java.math.BigDecimal
 import java.math.RoundingMode
 import javax.inject.Inject

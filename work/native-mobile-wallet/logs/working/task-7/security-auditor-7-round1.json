@@ -1,0 +1,50 @@
+{
+  "reviewer": "security-auditor-7",
+  "task": 7,
+  "round": 1,
+  "timestamp": "2026-03-04T21:00:00Z",
+  "files_reviewed": [
+    "android/core/evm/src/main/java/com/mcw/core/evm/EvmManager.kt",
+    "android/core/evm/src/test/java/com/mcw/core/evm/EvmManagerTest.kt"
+  ],
+  "verdict": "PASS_WITH_SUGGESTIONS",
+  "findings": [
+    {
+      "id": "SA-7-1",
+      "severity": "medium",
+      "file": "EvmManager.kt",
+      "line": 195,
+      "finding": "signTransaction creates Credentials from private key in memory. Credentials object may persist in JVM heap after use.",
+      "suggestion": "Document that Credentials object is short-lived (method-scoped). In a future task, consider using Android Keystore for key storage rather than raw hex strings.",
+      "rationale": "Current approach matches web wallet pattern. For Android, Keystore integration is a separate concern (not in this task scope)."
+    },
+    {
+      "id": "SA-7-2",
+      "severity": "low",
+      "file": "EvmManager.kt",
+      "line": 198,
+      "finding": "Catching generic Exception in signTransaction could mask unexpected errors",
+      "suggestion": "Consider logging the error type (without private key details) before returning null, or narrow the catch to specific crypto exceptions",
+      "rationale": "Silent failure makes debugging harder. But for a wallet, not crashing on sign failure is correct behavior."
+    },
+    {
+      "id": "SA-7-3",
+      "severity": "info",
+      "file": "EvmManagerTest.kt",
+      "line": 478,
+      "finding": "Test uses known private key from abandon mnemonic (0x1ab42cc...). This is a well-known test vector, not a real secret.",
+      "suggestion": "No change needed. Test vectors are appropriate for test code.",
+      "rationale": "Standard BIP39 test vector private key, not a security concern."
+    },
+    {
+      "id": "SA-7-4",
+      "severity": "low",
+      "file": "EvmManager.kt",
+      "line": 372,
+      "finding": "broadcastTransaction accepts raw hex string — no validation that it is actually a valid signed transaction",
+      "suggestion": "Consider adding basic hex validation (0x prefix, even length) before broadcasting",
+      "rationale": "Invalid data will fail at the RPC node anyway, but early validation provides better error messages"
+    }
+  ],
+  "summary": "No critical security issues. Private key handling is method-scoped and follows web wallet patterns. Offline-mode null returns prevent information leakage. Test keys are standard BIP39 vectors. Minor suggestions for logging and input validation."
+}

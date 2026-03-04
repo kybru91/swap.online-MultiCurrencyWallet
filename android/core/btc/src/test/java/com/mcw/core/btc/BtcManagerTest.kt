@@ -16,10 +16,10 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.bitcoinj.core.ECKey
 import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.core.Transaction
 import org.bitcoinj.core.Utils
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.script.ScriptBuilder
@@ -466,6 +466,12 @@ class BtcManagerTest {
       "Transaction hex should be valid hex (even length, hex chars only)",
       txHex.length % 2 == 0 && txHex.all { it in '0'..'9' || it in 'a'..'f' }
     )
+
+    // Deserialize and verify structure
+    val txBytes = Utils.HEX.decode(txHex)
+    val parsedTx = Transaction(MainNetParams.get(), txBytes)
+    assertEquals("Should have 1 input", 1, parsedTx.inputs.size)
+    assertEquals("Should have 2 outputs (recipient + change)", 2, parsedTx.outputs.size)
   }
 
   @Test
@@ -494,8 +500,15 @@ class BtcManagerTest {
 
     assertNotNull("Transaction hex should not be null", txHex)
     assertTrue("Transaction hex should not be empty", txHex.isNotEmpty())
-    // We can't easily verify output count from hex without parsing,
-    // but we verify the tx builds successfully with dust change
+
+    // Deserialize and verify: dust change absorbed -> only 1 output (recipient)
+    val txBytes = Utils.HEX.decode(txHex)
+    val parsedTx = Transaction(MainNetParams.get(), txBytes)
+    assertEquals(
+      "Dust change should be absorbed — only recipient output",
+      1,
+      parsedTx.outputs.size
+    )
   }
 
   // ===== Broadcast tests =====

@@ -68,10 +68,15 @@ jobs:
           # Copy mainnet build
           mkdir -p wordpress/vendors/swap
           cp -r build-mainnet-widget/* wordpress/vendors/swap/
+          # WordPress plugin reads app.js / vendor.js (unhashed) via load-app.php
+          cp build-mainnet-widget/mainnet-app.*.js wordpress/vendors/swap/app.js
+          cp build-mainnet-widget/mainnet-vendor.*.js wordpress/vendors/swap/vendor.js
 
           # Copy testnet build
           mkdir -p wordpress/vendors/swap/testnet
           cp -r build-testnet-widget/* wordpress/vendors/swap/testnet/
+          cp build-testnet-widget/testnet-app.*.js wordpress/vendors/swap/testnet/app.js
+          cp build-testnet-widget/testnet-vendor.*.js wordpress/vendors/swap/testnet/vendor.js
 
           echo "✓ Builds copied to wordpress/vendors/swap"
           ls -la wordpress/vendors/swap/ | head -10

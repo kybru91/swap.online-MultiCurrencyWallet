@@ -78,7 +78,7 @@ jobs:
 
       - name: Create info.json
         run: |
-          COMMIT_MSG=$(echo '${{ github.event.head_commit.message }}' | head -1 | sed 's/"/\\"/g')
+          COMMIT_MSG=$(git log -1 --pretty=format:'%s' | sed "s/'/'/g" | sed 's/"/\\"/g')
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S")
 
           cat > info.json << EOF

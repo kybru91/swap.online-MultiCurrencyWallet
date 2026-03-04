@@ -113,17 +113,6 @@ const Apps = (props: AppsProps) => {
   if (selectedApp) {
     return (
       <section styleName="appsPageFull">
-        <div styleName="appsSwitchRow">
-          <button
-            type="button"
-            styleName="appsBackButton"
-            onClick={handleOpenCatalog}
-          >
-            ← <FormattedMessage id="Apps_AllApps" defaultMessage="All apps" />
-          </button>
-          <span styleName="appCurrentTitle">{selectedApp.menuTitle || selectedApp.title}</span>
-        </div>
-
         {!isAllowedAppUrl && (
           <div className="container">
             <div styleName="securityNotice">

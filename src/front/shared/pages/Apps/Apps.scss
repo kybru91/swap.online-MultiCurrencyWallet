@@ -128,7 +128,7 @@
   border: 0;
   flex: 1;
   min-height: 640px;
-  height: calc(100vh - 105px);
+  height: calc(100vh - 60px);
   box-shadow: none;
   border-radius: 0;
   background: transparent;
@@ -140,7 +140,7 @@
   }
 
   .appFrame {
-    height: calc(100vh - 145px);
+    height: calc(100vh - 100px);
     min-height: 460px;
   }
 }

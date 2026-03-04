@@ -886,6 +886,12 @@
         document.documentElement.style.setProperty("--color-brand-hover", window.brandColorHover);
       }
 
+      if (window.brandBorderRadius) {
+        document.documentElement.style.setProperty("--button-border-radius", window.brandBorderRadius);
+        document.documentElement.style.setProperty("--card-border-radius", window.brandBorderRadius);
+        document.documentElement.style.setProperty("--main-component-border-radius", window.brandBorderRadius);
+      }
+
       /* /Loader before any JS */
 
       /* Start Modal Scripts */

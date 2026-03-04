@@ -128,3 +128,28 @@
 - `./gradlew :core:network:test` -> BUILD SUCCESSFUL, 50 tests passed (0 failures)
 - `./gradlew assembleDebug` -> BUILD SUCCESSFUL
 - All 7 TDD anchors pass: failover switches endpoint, 500ms queuing verified, health tracking works, HTTPS allowed, HTTP rejected, private IP rejected, localhost rejected
+
+## Task 7: EVM Operations — Balance, ERC20, Gas, Broadcast
+
+**Status:** Done
+**Commit:** b0d3a9c40, 3def5621d
+**Agent:** evm-engineer-7
+**Summary:** Implemented EvmManager in :core:evm with full EVM operations: native balance via eth_getBalance, ERC20 token balance via ABI-encoded balanceOf call, CoinGecko fiat price parsing, gas estimation with 1.05x buffer for tokens (matching web wallet's ethLikeAction.ts), RawTransaction building, EIP-155 signing via web3j, and eth_sendRawTransaction broadcast. All network methods return null on failure (offline mode). Added @Inject constructor for Hilt DI, hex input validation on broadcast, and GasEstimate data class.
+**Deviations:** None. Gas buffer (1.05x for tokens, no buffer for native) matches web wallet exactly. CoinGecko ID mapping covers BTC/ETH/BNB/MATIC per spec.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer: 4 findings (1 minor, 3 low) -> [logs/working/task-7/code-reviewer-7-round1.json]
+- security-auditor: 4 findings (1 medium, 2 low, 1 info) -> [logs/working/task-7/security-auditor-7-round1.json]
+- test-reviewer: 4 findings (2 low, 2 info) -> [logs/working/task-7/test-reviewer-7-round1.json]
+
+All actionable findings addressed in fix commit 3def5621d.
+
+**Verification:**
+- `./gradlew :core:evm:test` -> BUILD SUCCESSFUL, 38 tests passed (0 failures)
+- Balance parsing: 1 ETH = 1e18 wei, USDT 6 decimals, WBTC 8 decimals, standard 18 decimals
+- Gas buffer: 50000 * 1.05 = 52500 for tokens, 21000 unchanged for native
+- Offline mode: all 3 network methods (balance, token balance, gas) return null on error
+- Fiat: 1.5 * $50000 = $75000.00
+- EIP-155 signing produces different signatures for different keys

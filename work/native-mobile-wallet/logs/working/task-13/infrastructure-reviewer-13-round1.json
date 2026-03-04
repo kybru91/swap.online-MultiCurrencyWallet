@@ -1,0 +1,50 @@
+{
+  "reviewer": "infrastructure-reviewer-13",
+  "task": 13,
+  "round": 1,
+  "status": "pass",
+  "summary": "Infrastructure review for Settings/White-label/Crashlytics. Build configuration, dependency management, ProGuard rules, and Firebase integration all correct.",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "info",
+      "file": "android/app/build.gradle.kts",
+      "finding": "White-label setup: applicationId overridable via -PAPP_ID, APP_NAME via -PAPP_NAME. Both exposed as resValue and buildConfigField. Pattern is standard for Android white-label builds.",
+      "action": "accepted"
+    },
+    {
+      "id": 2,
+      "severity": "info",
+      "file": "android/app/build.gradle.kts",
+      "finding": "Timber 5.0.1 added as dependency. Version is current stable. ProGuard rule added for timber.log.** dontwarn.",
+      "action": "accepted"
+    },
+    {
+      "id": 3,
+      "severity": "info",
+      "file": "android/app/src/main/java/com/mcw/wallet/MCWalletApplication.kt",
+      "finding": "Firebase Crashlytics initialization: disabled in debug, enabled in release. Timber tree selection per build type. Follows standard Android pattern.",
+      "action": "accepted"
+    },
+    {
+      "id": 4,
+      "severity": "info",
+      "file": "android/app/google-services.json",
+      "finding": "Placeholder google-services.json is present with dummy values. This allows the build to succeed without a real Firebase project. Real values should be configured during deployment.",
+      "action": "accepted"
+    },
+    {
+      "id": 5,
+      "severity": "info",
+      "file": "android/core/storage/src/main/java/com/mcw/core/storage/SecureStorage.kt",
+      "finding": "Custom RPC config storage added with simple JSON serialization. No external JSON library needed — avoids adding dependency to :core:storage module. Parsing is basic but sufficient for key:value pairs.",
+      "action": "accepted"
+    }
+  ],
+  "build_verification": {
+    "debug_build": "PASS",
+    "release_build": "not_tested (placeholder google-services.json)",
+    "tests_pass": true,
+    "proguard_rules": "present and correct"
+  }
+}

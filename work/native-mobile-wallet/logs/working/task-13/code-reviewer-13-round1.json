@@ -1,0 +1,42 @@
+{
+  "reviewer": "code-reviewer-13",
+  "task": 13,
+  "round": 1,
+  "status": "findings",
+  "summary": "Settings screen, white-label, Crashlytics implementation reviewed. 3 findings: 1 minor (hardcoded app name), 1 low (unused SnackbarHostState), 1 info (sanitizer regex documentation).",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "minor",
+      "file": "android/app/src/main/java/com/mcw/wallet/ui/settings/SettingsScreen.kt",
+      "line": 327,
+      "finding": "About section uses hardcoded 'MCW Wallet' and '1.0.0' instead of BuildConfig.APP_NAME and BuildConfig.VERSION_NAME. This breaks white-label requirement.",
+      "action": "fixed",
+      "fix_commit": "7d57c9e2d"
+    },
+    {
+      "id": 2,
+      "severity": "low",
+      "file": "android/app/src/main/java/com/mcw/wallet/ui/settings/SettingsScreen.kt",
+      "line": 89,
+      "finding": "SnackbarHostState is created but never used. Dead code.",
+      "action": "fixed",
+      "fix_commit": "7d57c9e2d"
+    },
+    {
+      "id": 3,
+      "severity": "info",
+      "file": "android/app/src/main/java/com/mcw/wallet/logging/SecureLogSanitizer.kt",
+      "line": 30,
+      "finding": "MNEMONIC_PATTERN matches 5+ consecutive lowercase words. This could false-positive on normal English sentences. Acceptable for MVP — sanitizer is defense-in-depth, primary protection is TxLogEvent data class which structurally excludes sensitive fields.",
+      "action": "accepted"
+    }
+  ],
+  "test_results": {
+    "total": 90,
+    "passed": 90,
+    "failed": 0,
+    "new_tests": 26,
+    "tdd_anchors_covered": ["testRpcUrlValidationHttps", "testRpcUrlValidationHttp", "testRpcUrlValidationPrivateIp", "testCrashlyticsLogging"]
+  }
+}

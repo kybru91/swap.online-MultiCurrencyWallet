@@ -1,8 +1,11 @@
 package com.mcw.core.btc
 
+import com.mcw.core.network.TransactionRecord
+import com.mcw.core.network.TxDirection
 import com.mcw.core.network.api.BitpayApi
 import com.mcw.core.network.api.BitpayBroadcastRequest
 import com.mcw.core.network.api.BlockcypherApi
+import com.mcw.core.network.api.BlockcypherTxRef
 import org.bitcoinj.core.Coin
 import org.bitcoinj.core.ECKey
 import org.bitcoinj.core.LegacyAddress
@@ -13,6 +16,9 @@ import org.bitcoinj.core.TransactionOutPoint
 import org.bitcoinj.params.MainNetParams
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import javax.inject.Inject
 import kotlin.math.max
 
@@ -38,24 +44,6 @@ class BtcManager @Inject constructor(
   private val blockcypherApi: BlockcypherApi,
   private val networkParams: NetworkParameters = MainNetParams.get(),
 ) {
-
-  companion object {
-    /** Minimum viable UTXO value — outputs below this are uneconomical to spend */
-    const val DUST_SAT = 546L
-
-    /** Transaction size constants for P2PKH (from web's TRANSACTION.ts) */
-    const val P2PKH_IN_SIZE = 148
-    const val P2PKH_OUT_SIZE = 34
-    const val TX_SIZE = 15
-
-    /** Fallback fee rates in sat/KB (from web's DEFAULT_CURRENCY_PARAMETERS) */
-    const val DEFAULT_FEE_SLOW = 5_000L
-    const val DEFAULT_FEE_NORMAL = 15_000L
-    const val DEFAULT_FEE_FAST = 30_000L
-
-    /** Satoshis per BTC */
-    private val SATOSHI_DIVISOR = BigDecimal("100000000")
-  }
 
   // Secondary constructor for testing without Hilt
   constructor(
@@ -317,6 +305,157 @@ class BtcManager @Inject constructor(
       response.txid
     } catch (e: Exception) {
       throw BroadcastException("Broadcast failed: ${e.message}", e)
+    }
+  }
+
+  /**
+   * Fetches BTC transaction history for an address via Blockcypher API.
+   *
+   * Blockcypher returns txrefs (transaction references) which contain:
+   * - tx_hash: the transaction ID
+   * - tx_input_n: -1 if this address received funds, >= 0 if spent
+   * - value: amount in satoshis
+   * - confirmations: number of confirmations
+   * - confirmed: ISO 8601 timestamp
+   *
+   * Multiple txrefs can reference the same tx_hash (multiple inputs/outputs).
+   * We merge these by grouping on tx_hash and summing values to get a single
+   * TransactionRecord per transaction.
+   *
+   * @param address BTC address (P2PKH format)
+   * @return list of TransactionRecord sorted by timestamp descending, or null on error
+   */
+  suspend fun fetchTransactionHistory(address: String): List<TransactionRecord>? {
+    return try {
+      val response = blockcypherApi.getAddressTransactions(address)
+
+      val confirmedTxRefs = response.txrefs.orEmpty()
+      val unconfirmedTxRefs = response.unconfirmedTxrefs.orEmpty()
+      val allRefs = confirmedTxRefs + unconfirmedTxRefs
+
+      if (allRefs.isEmpty()) {
+        return emptyList()
+      }
+
+      // Group by tx_hash — a single transaction can appear multiple times
+      // if the address has multiple inputs/outputs in the same tx
+      val grouped = allRefs.groupBy { it.txHash }
+
+      grouped.map { (txHash, refs) ->
+        parseBtcTxRefs(txHash, refs, address)
+      }.sortedByDescending { it.timestamp }
+    } catch (e: Exception) {
+      // Offline mode: return null, UI shows error
+      null
+    }
+  }
+
+  /**
+   * Parses a group of Blockcypher txrefs (all sharing the same tx_hash)
+   * into a single TransactionRecord.
+   *
+   * Direction logic:
+   * - tx_input_n == -1: this address received funds (IN direction for this ref)
+   * - tx_input_n >= 0: this address spent funds (OUT direction for this ref)
+   * - If both IN and OUT refs exist for the same tx_hash: SELF transaction
+   *
+   * Amount is the net value:
+   * - IN: sum of all received values
+   * - OUT: sum of all spent values
+   * - SELF: sum of received values (net amount after fee)
+   *
+   * @param txHash the transaction ID
+   * @param refs all txrefs for this transaction
+   * @param walletAddress the wallet's BTC address
+   * @return a TransactionRecord representing this transaction
+   */
+  fun parseBtcTxRefs(
+    txHash: String,
+    refs: List<BlockcypherTxRef>,
+    walletAddress: String,
+  ): TransactionRecord {
+    val receivedRefs = refs.filter { it.txInputN == -1 }
+    val spentRefs = refs.filter { it.txInputN >= 0 }
+
+    val hasReceived = receivedRefs.isNotEmpty()
+    val hasSpent = spentRefs.isNotEmpty()
+
+    val direction = when {
+      hasReceived && hasSpent -> TxDirection.SELF
+      hasReceived -> TxDirection.IN
+      else -> TxDirection.OUT
+    }
+
+    // Calculate amount in BTC
+    val amountSatoshis = when (direction) {
+      TxDirection.IN -> receivedRefs.sumOf { it.value }
+      TxDirection.OUT -> spentRefs.sumOf { it.value }
+      TxDirection.SELF -> receivedRefs.sumOf { it.value }
+    }
+
+    val amount = BigDecimal(amountSatoshis)
+      .divide(SATOSHI_DIVISOR, 8, RoundingMode.HALF_EVEN)
+
+    // Use the first ref for metadata (they all share the same tx)
+    val firstRef = refs.first()
+    val confirmations = firstRef.confirmations
+    val blockHeight = firstRef.blockHeight
+
+    // Parse ISO 8601 timestamp to epoch seconds
+    val timestamp = parseBlockcypherTimestamp(firstRef.confirmed)
+
+    // Counterparty: for Blockcypher txrefs we don't have the counterparty address
+    // directly — the txref only shows this address's involvement.
+    // We use the wallet address as a placeholder; the detail view can fetch
+    // full tx data for the actual counterparty if needed.
+    val counterparty = walletAddress
+
+    return TransactionRecord(
+      hash = txHash,
+      direction = direction,
+      amount = amount,
+      fee = BigDecimal.ZERO.setScale(8), // Blockcypher txrefs don't include per-tx fee
+      currency = "BTC",
+      timestamp = timestamp,
+      confirmations = confirmations,
+      counterpartyAddress = counterparty,
+      blockNumber = blockHeight,
+    )
+  }
+
+  companion object {
+    /** Minimum viable UTXO value -- outputs below this are uneconomical to spend */
+    const val DUST_SAT = 546L
+
+    /** Transaction size constants for P2PKH (from web's TRANSACTION.ts) */
+    const val P2PKH_IN_SIZE = 148
+    const val P2PKH_OUT_SIZE = 34
+    const val TX_SIZE = 15
+
+    /** Fallback fee rates in sat/KB (from web's DEFAULT_CURRENCY_PARAMETERS) */
+    const val DEFAULT_FEE_SLOW = 5_000L
+    const val DEFAULT_FEE_NORMAL = 15_000L
+    const val DEFAULT_FEE_FAST = 30_000L
+
+    /** Satoshis per BTC */
+    private val SATOSHI_DIVISOR = BigDecimal("100000000")
+
+    /**
+     * Parses a Blockcypher ISO 8601 timestamp to epoch seconds.
+     *
+     * Format: "2014-05-22T03:46:25Z"
+     * Returns 0 if the timestamp is null or unparseable.
+     */
+    fun parseBlockcypherTimestamp(timestamp: String?): Long {
+      if (timestamp == null) return 0L
+      return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        val date = sdf.parse(timestamp)
+        date?.time?.div(1000) ?: 0L
+      } catch (e: Exception) {
+        0L
+      }
     }
   }
 }

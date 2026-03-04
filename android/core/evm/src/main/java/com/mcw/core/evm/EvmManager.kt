@@ -1,6 +1,10 @@
 package com.mcw.core.evm
 
+import com.mcw.core.network.TransactionRecord
+import com.mcw.core.network.TxDirection
 import com.mcw.core.network.api.CoinGeckoApi
+import com.mcw.core.network.api.EtherscanApi
+import com.mcw.core.network.api.EtherscanTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.web3j.abi.FunctionEncoder
@@ -146,6 +150,119 @@ class EvmManager @Inject constructor() {
      */
     fun calculateFiatValue(balance: BigDecimal, price: BigDecimal): BigDecimal {
       return balance.multiply(price).setScale(2, RoundingMode.HALF_UP)
+    }
+
+    /**
+     * Determines the transaction direction by comparing from/to addresses
+     * with the wallet address. Case-insensitive comparison for EVM addresses.
+     *
+     * @param from the sender address
+     * @param to the recipient address
+     * @param walletAddress the wallet's own address
+     * @return IN if received, OUT if sent, SELF if sent to self
+     */
+    fun determineEvmDirection(
+      from: String,
+      to: String,
+      walletAddress: String,
+    ): TxDirection {
+      val fromIsWallet = from.equals(walletAddress, ignoreCase = true)
+      val toIsWallet = to.equals(walletAddress, ignoreCase = true)
+
+      return when {
+        fromIsWallet && toIsWallet -> TxDirection.SELF
+        fromIsWallet -> TxDirection.OUT
+        toIsWallet -> TxDirection.IN
+        // Fallback: if neither matches (e.g., contract interaction where
+        // the address is involved indirectly), default to IN
+        else -> TxDirection.IN
+      }
+    }
+
+    /**
+     * Parses a single Etherscan transaction response into a TransactionRecord.
+     *
+     * Fee calculation: gasUsed * gasPrice (both in wei), converted to native units.
+     * Amount: value in wei, converted to native units.
+     * Timestamp: Etherscan returns unix epoch seconds as a string.
+     *
+     * @param tx the Etherscan transaction data
+     * @param walletAddress the wallet's EVM address for direction determination
+     * @param currency the native currency symbol
+     * @return a TransactionRecord
+     */
+    fun parseEvmTransaction(
+      tx: EtherscanTransaction,
+      walletAddress: String,
+      currency: String,
+    ): TransactionRecord {
+      val direction = determineEvmDirection(tx.from, tx.to, walletAddress)
+
+      // Amount in native units (wei -> ETH/BNB/MATIC)
+      val valueWei = try {
+        BigDecimal(tx.value)
+      } catch (e: NumberFormatException) {
+        BigDecimal.ZERO
+      }
+      val amount = valueWei.divide(WEI_PER_ETH, ETH_DECIMALS, RoundingMode.HALF_UP)
+
+      // Fee = gasUsed * gasPrice (both in wei)
+      val gasUsed = try {
+        BigDecimal(tx.gasUsed)
+      } catch (e: NumberFormatException) {
+        BigDecimal.ZERO
+      }
+      val gasPrice = try {
+        BigDecimal(tx.gasPrice)
+      } catch (e: NumberFormatException) {
+        BigDecimal.ZERO
+      }
+      val feeWei = gasUsed.multiply(gasPrice)
+      val fee = feeWei.divide(WEI_PER_ETH, ETH_DECIMALS, RoundingMode.HALF_UP)
+
+      // Timestamp
+      val timestamp = try {
+        tx.timeStamp.toLong()
+      } catch (e: NumberFormatException) {
+        0L
+      }
+
+      // Confirmations
+      val confirmations = try {
+        tx.confirmations.toInt()
+      } catch (e: NumberFormatException) {
+        0
+      }
+
+      // Block number
+      val blockNumber = try {
+        tx.blockNumber.toLong()
+      } catch (e: NumberFormatException) {
+        0L
+      }
+
+      // Counterparty: the other party in the transaction
+      val counterparty = when (direction) {
+        TxDirection.OUT -> tx.to
+        TxDirection.IN -> tx.from
+        TxDirection.SELF -> tx.to
+      }
+
+      // Error status
+      val isError = tx.isError == "1" || tx.txReceiptStatus == "0"
+
+      return TransactionRecord(
+        hash = tx.hash,
+        direction = direction,
+        amount = amount,
+        fee = fee,
+        currency = currency,
+        timestamp = timestamp,
+        confirmations = confirmations,
+        counterpartyAddress = counterparty,
+        blockNumber = blockNumber,
+        isError = isError,
+      )
     }
 
     /**
@@ -383,6 +500,49 @@ class EvmManager @Inject constructor() {
       }
     } catch (e: Exception) {
       // Offline mode: return null
+      null
+    }
+  }
+
+  /**
+   * Fetches EVM transaction history for an address via Etherscan API.
+   *
+   * Etherscan V2 API returns a list of normal transactions for the address.
+   * Each transaction is parsed into a TransactionRecord with direction
+   * determined by comparing from/to with the wallet address.
+   *
+   * @param address the wallet's EVM address (0x-prefixed)
+   * @param chainId the chain ID for the Etherscan V2 API query
+   * @param currency the native currency symbol (e.g., "ETH", "BNB", "MATIC")
+   * @param apiKey the Etherscan API key for the chain
+   * @param etherscanApi the Etherscan Retrofit API interface
+   * @return list of TransactionRecord sorted by timestamp descending, or null on error
+   */
+  suspend fun fetchTransactionHistory(
+    address: String,
+    chainId: Long,
+    currency: String,
+    apiKey: String,
+    etherscanApi: EtherscanApi,
+  ): List<TransactionRecord>? {
+    return try {
+      withContext(Dispatchers.IO) {
+        val response = etherscanApi.getTransactions(
+          chainId = chainId,
+          address = address,
+          apiKey = apiKey,
+        )
+
+        if (response.status != "1" || response.result.isEmpty()) {
+          return@withContext emptyList()
+        }
+
+        response.result.map { tx ->
+          parseEvmTransaction(tx, address, currency)
+        }
+      }
+    } catch (e: Exception) {
+      // Offline mode: return null, UI shows error
       null
     }
   }

@@ -314,3 +314,20 @@ All findings fixed in commit a42dd7b7d.
 - Multi-chain merge: BTC+ETH+BNB sorted by timestamp desc
 - Formatting: hash truncation, min 2 decimals, 1000+ confirmations capped
 - Offline mode: null from API -> error banner when all chains fail, partial results shown otherwise
+
+## Task 14: Pre-deploy QA
+
+**Status:** Done (QA FAILED — 2 criticals)
+**Agent:** qa-engineer
+**Summary:** QA completed. 457 unique tests green across 8 modules, 42 acceptance criteria checked (31 passed, 3 failed, 8 not_verifiable). Two critical blockers found: (1) Task 4 (Biometric Auth + Auto-lock) was never implemented despite being marked done — core:auth is an empty stub, (2) Release APK build fails due to missing ProGuard rule for slf4j.
+**Deviations:** No deviations from QA spec. Findings accurately reflect implementation state.
+
+**Deferred to post-deploy:** 8 criteria require live device/environment verification (offline mode, QR camera, WebView loading, Crashlytics, documentation, biometric/lockout after Task 4 re-implementation). See deferredToPostDeploy in qa-report.json.
+
+**Verification:**
+- `./gradlew test` -> BUILD SUCCESSFUL, 457 tests passed (0 failures)
+- `./gradlew assembleDebug` -> BUILD SUCCESSFUL, APK 64MB
+- `./gradlew assembleRelease` -> FAILED (R8 missing rule, 1-line fix needed)
+- `./gradlew lint` -> 0 errors, 50 warnings
+- Full report: [logs/working/task-14/pre-deploy-qa-report.json]
+- Human-readable: [logs/working/task-14/pre-deploy-qa-report.md]

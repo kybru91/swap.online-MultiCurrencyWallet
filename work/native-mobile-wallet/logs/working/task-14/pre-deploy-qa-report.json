@@ -1,0 +1,294 @@
+{
+  "status": "failed",
+  "summary": {
+    "totalChecks": 42,
+    "passed": 31,
+    "failed": 3,
+    "notVerifiable": 8,
+    "criticals": 2,
+    "majors": 1,
+    "minors": 0
+  },
+  "testSuite": {
+    "status": "passed",
+    "details": "All 457 unique tests passed across 8 modules (debug variant). Module breakdown: app=113, core/crypto=31, core/btc=50, core/evm=55, core/network=50, core/storage=22, feature/dapp-browser=70, feature/walletconnect=66. Both debug and release test variants run clean (914 total executions). Lint: 0 errors, 50 warnings across all modules."
+  },
+  "build": {
+    "debug": "PASSED — app-debug.apk produced (64MB)",
+    "release": "FAILED — R8 minification error: missing class org.slf4j.impl.StaticLoggerBinder. Fix: add -dontwarn org.slf4j.impl.StaticLoggerBinder to proguard-rules.pro",
+    "lint": "PASSED — 0 errors, 50 warnings (all non-blocking)"
+  },
+  "acceptanceCriteria": [
+    {
+      "criterion": "AC-1: Create wallet generates valid BIP39 mnemonic (12 words)",
+      "status": "passed",
+      "evidence": "CryptoManagerTest: generateMnemonic produces 12 words, all from BIP39 wordlist, checksum valid. 31 tests in core/crypto."
+    },
+    {
+      "criterion": "AC-2: Seed phrase confirmation — verify 3 random words from 12",
+      "status": "passed",
+      "evidence": "OnboardingViewModelTest: 13 tests cover confirmation flow, 3 random positions selected, 3-failure reset to mnemonic display. Code: OnboardingViewModel.kt MAX_CONFIRMATION_ATTEMPTS=3."
+    },
+    {
+      "criterion": "AC-3: App password creation (minimum 8 chars, bcrypt hash)",
+      "status": "passed",
+      "evidence": "OnboardingViewModelTest: password validation requires 8+ chars, bcrypt hash with $2a$12$ prefix verified. Code: OnboardingViewModel.kt MIN_PASSWORD_LENGTH=8, BCrypt.hashpw with gensalt(12)."
+    },
+    {
+      "criterion": "AC-4: Import wallet validates length (12 words), BIP39 wordlist, checksum",
+      "status": "passed",
+      "evidence": "CryptoManagerTest: tests for word count != 12 (error msg includes count), invalid word (error includes position+word), bad checksum (specific error). 7 validation test cases."
+    },
+    {
+      "criterion": "AC-5: BIP44 derivation correct — addresses match web wallet",
+      "status": "passed",
+      "evidence": "CryptoManagerTest: two known mnemonics (abandon...about and zoo...wrong) cross-validated against web wallet output. BTC m/44'/0'/0'/0/0, ETH m/44'/60'/0'/0/0. All 4 addresses match exactly."
+    },
+    {
+      "criterion": "AC-6: Encrypted storage — AES-256-GCM via Android KeyStore",
+      "status": "passed",
+      "evidence": "SecureStorage.kt: MasterKey.KeyScheme.AES256_GCM, PrefKeyEncryptionScheme.AES256_SIV, PrefValueEncryptionScheme.AES256_GCM. 22 unit tests in core/storage. KeyStore corruption handling tested."
+    },
+    {
+      "criterion": "AC-7: Biometric unlock (BiometricPrompt API) with password fallback",
+      "status": "failed",
+      "evidence": "CRITICAL: core:auth module contains only a stub (empty AuthManager class, 7 bytes). Task 4 marked as done but no implementation exists. No unit tests for auth module. Biometric prompt integration points exist as comments in SendViewModel/SendScreen but actual BiometricPrompt calls are absent."
+    },
+    {
+      "criterion": "AC-8: Balance fetched on pull-to-refresh (no persistent cache)",
+      "status": "passed",
+      "evidence": "WalletScreen.kt uses compose-material pullRefresh. WalletViewModelTest: 8 tests cover refresh flow, offline mode (retain in-memory, error banner, disable Send). No Room/SQLite database in project."
+    },
+    {
+      "criterion": "AC-9: Send BTC — UTXO selection, fee estimation, broadcast",
+      "status": "passed",
+      "evidence": "BtcManagerTest: 33 tests cover fetchBalance, UTXO selection (single/multi-input, insufficient funds), dust change absorption (< 546 sat), fee calculation, P2PKH tx construction and broadcast. Constants match web wallet TRANSACTION.ts."
+    },
+    {
+      "criterion": "AC-10: Send EVM — gas estimation (1.05x buffer for tokens), sign, broadcast",
+      "status": "passed",
+      "evidence": "EvmManagerTest: 38 tests cover eth_getBalance parsing, gas estimation (21000 native, 50000*1.05=52500 tokens), EIP-155 signing, eth_sendRawTransaction broadcast. Offline returns null."
+    },
+    {
+      "criterion": "AC-11: dApp Browser — window.ethereum EIP-1193 provider injected",
+      "status": "passed",
+      "evidence": "DAppBrowserTest: 70 tests. JavaScript injection with Object.freeze, single @JavascriptInterface bridge, origin validation per call, rate limiting (10 calls/sec). EIP-6963 provider announcement."
+    },
+    {
+      "criterion": "AC-12: dApp Browser — eth_requestAccounts, eth_accounts, eth_chainId, eth_sendTransaction, personal_sign",
+      "status": "passed",
+      "evidence": "RpcMethodHandler.kt defines SUPPORTED_METHODS including all required methods. DAppBrowserViewModel handles each method. Tests verify method dispatch."
+    },
+    {
+      "criterion": "AC-13: dApp Browser — eth_signTypedData_v4, wallet_switchEthereumChain, wallet_addEthereumChain",
+      "status": "passed",
+      "evidence": "All three methods in SUPPORTED_METHODS and REQUIRES_APPROVAL sets. wallet_addEthereumChain restricted to chain IDs 1/56/137 per ChainValidator. Tests verify chain allowlist."
+    },
+    {
+      "criterion": "AC-14: dApp Browser — accountsChanged and chainChanged events",
+      "status": "passed",
+      "evidence": "DAppBrowserScreen.kt emits events via evaluateJavascript. Event name injection protection in place (alphanumeric+Changed pattern only)."
+    },
+    {
+      "criterion": "AC-15: dApp Browser — native confirmation dialog for eth_sendTransaction",
+      "status": "passed",
+      "evidence": "DAppBrowserScreen.kt ConfirmationDialog composable shows to/value/data. Function signature decoding (transfer/approve/swap). MAX_UINT256 unlimited approval warning."
+    },
+    {
+      "criterion": "AC-16: dApp Browser — private keys never exposed to WebView",
+      "status": "passed",
+      "evidence": "Architecture: JS bridge sends request to native, native signs with keys from SecureStorage, returns tx hash only. Private keys exist only in ViewModel/Manager layer, never passed to WebView."
+    },
+    {
+      "criterion": "AC-17: WalletConnect v2 — QR scanner + URI parsing",
+      "status": "passed",
+      "evidence": "WalletConnectUriParserTest: 21 tests cover valid URIs, invalid URIs, topic extraction, relay validation. No Android framework dependency for testability."
+    },
+    {
+      "criterion": "AC-18: WalletConnect v2 — session 24h lifetime",
+      "status": "passed",
+      "evidence": "WalletConnectManagerTest: 33 tests. Session expiry at 24h verified (25h expired, 23h59m retained, exactly 24h removed). Cleanup runs on app launch."
+    },
+    {
+      "criterion": "AC-19: WalletConnect v2 — session persisted in EncryptedSharedPreferences",
+      "status": "passed",
+      "evidence": "WalletConnectManager uses SecureStorage for session persistence. SessionSerializer (12 tests) handles JSON serialization. Approve -> restart -> session restored."
+    },
+    {
+      "criterion": "AC-20: Transaction history displayed (sent/received)",
+      "status": "passed",
+      "evidence": "BtcHistoryTest (17 tests) + EvmHistoryTest (17 tests) + HistoryViewModelTest (7 tests) + HistoryFormattingTest (16 tests). Direction detection: BTC (tx_input_n), EVM (from/to comparison). Multi-chain merge sorted by timestamp."
+    },
+    {
+      "criterion": "AC-21: Settings — custom RPC URL with validation",
+      "status": "passed",
+      "evidence": "SettingsViewModelTest: 16 tests. RpcUrlValidator: HTTPS-only, private IP blocking (192.168/10.0/172.16/127.0/localhost). Custom RPC URL persisted."
+    },
+    {
+      "criterion": "AC-22: Settings — network selector",
+      "status": "passed",
+      "evidence": "SettingsScreen.kt: network selector for ETH/BSC/Polygon. SupportedNetwork.kt defines chain IDs 1/56/137. Restart dialog on network change."
+    },
+    {
+      "criterion": "AC-23: White-label — app name/ID configurable via build config",
+      "status": "passed",
+      "evidence": "build.gradle.kts: applicationId from -PAPP_ID property, APP_NAME from -PAPP_NAME property. Default: com.mcw.wallet / MCW Wallet. No hardcoded branding."
+    },
+    {
+      "criterion": "AC-24: Crashlytics — secret-safe logging",
+      "status": "passed",
+      "evidence": "SecureLoggingTest: 10 tests. SecureLogSanitizer redacts: WIF keys (5H...), ETH hex keys (64-char hex), mnemonics (12+ BIP39 words), bcrypt hashes ($2a/$2b/$2y). SecureCrashlyticsTree strips DEBUG in release. TxLogger logs only safe fields (tx hash, status, chain, error)."
+    },
+    {
+      "criterion": "AC-25: FLAG_SECURE on mnemonic screens",
+      "status": "passed",
+      "evidence": "OnboardingScreen.kt: FlagSecureEffect() composable sets/clears FLAG_SECURE on mnemonic display and seed confirmation screens. SettingsScreen.kt: FLAG_SECURE set when backup mnemonic is shown."
+    },
+    {
+      "criterion": "AC-26: network_security_config.xml with cleartextTrafficPermitted=false",
+      "status": "passed",
+      "evidence": "app/src/main/res/xml/network_security_config.xml: <base-config cleartextTrafficPermitted=\"false\" />"
+    },
+    {
+      "criterion": "AC-27: WebView security settings (Decision 9)",
+      "status": "passed",
+      "evidence": "DAppBrowserScreen.kt: allowFileAccess=false, mixedContentMode=MIXED_CONTENT_NEVER_ALLOW, allowFileAccessFromFileURLs=false. URL validation: HTTPS only, private IPs blocked."
+    },
+    {
+      "criterion": "AC-28: Auto-lock (5min inactivity, 30s background)",
+      "status": "failed",
+      "evidence": "CRITICAL: core:auth module is a stub. Auto-lock timers not implemented. No inactivity timer, no background timer, no LockState sealed class. Task 4 has review reports but no implementation commit."
+    },
+    {
+      "criterion": "AC-29: eth_sign rejected",
+      "status": "passed",
+      "evidence": "DAppBrowserTest.testEthSignRejection: eth_sign returns error 'Unsupported method: eth_sign is deprecated and unsafe'. RpcMethodHandler.kt REJECTED_METHODS map."
+    },
+    {
+      "criterion": "AC-30: wallet_addEthereumChain rejects unknown chain IDs",
+      "status": "passed",
+      "evidence": "DAppBrowserTest.testChainAllowlist: chain IDs 1/56/137 allowed, unknown (999) rejected. ChainValidator.kt ALLOWED_CHAIN_IDS set."
+    },
+    {
+      "criterion": "AC-31: Domain policy blocks unknown domains",
+      "status": "passed",
+      "evidence": "DAppBrowserTest: testDomainPolicy_knownDomainAllowed + testDomainPolicy_unknownDomainBlocked. DomainPolicy.kt DEFAULT_ALLOWED_DOMAINS (dex.onout.org, app.aave.com)."
+    },
+    {
+      "criterion": "AC-32: Fiat currency display (USD via CoinGecko)",
+      "status": "passed",
+      "evidence": "WalletViewModelTest: fiat prices populated when available, null when API unavailable. CoinGecko API integrated in :core:network. WalletUiState.balanceUsd field."
+    },
+    {
+      "criterion": "AC-33: APK generated (debug builds)",
+      "status": "passed",
+      "evidence": "assembleDebug: BUILD SUCCESSFUL, app-debug.apk produced (64MB) at app/build/outputs/apk/debug/"
+    },
+    {
+      "criterion": "AC-34: Release APK with R8/ProGuard",
+      "status": "failed",
+      "evidence": "assembleRelease: FAILED. R8 error: missing class org.slf4j.impl.StaticLoggerBinder. Fix needed: add '-dontwarn org.slf4j.impl.StaticLoggerBinder' to proguard-rules.pro. This is a 1-line fix."
+    },
+    {
+      "criterion": "AC-35: Offline mode — show last known balances with timestamp",
+      "status": "not_verifiable",
+      "evidence": "Unit tests verify in-memory balance retention and error banner. Full offline behavior requires live device testing."
+    },
+    {
+      "criterion": "AC-36: Biometric fail 3x fallback to password",
+      "status": "not_verifiable",
+      "evidence": "core:auth is a stub — BiometricPrompt not integrated. Cannot be verified pre-deploy."
+    },
+    {
+      "criterion": "AC-37: Password lockout after 5 failed attempts (60s)",
+      "status": "not_verifiable",
+      "evidence": "core:auth is a stub — lockout logic not implemented. Cannot be verified."
+    },
+    {
+      "criterion": "AC-38: QR scanner opens camera",
+      "status": "not_verifiable",
+      "evidence": "Requires physical device with camera. URI parsing is unit tested (21 tests) but camera integration is not verifiable pre-deploy."
+    },
+    {
+      "criterion": "AC-39: WebView loads dex.onout.org and app.aave.com",
+      "status": "not_verifiable",
+      "evidence": "DomainPolicy allows both domains. WebView creation tested. Actual page load requires device with network."
+    },
+    {
+      "criterion": "AC-40: Firebase Crashlytics integration",
+      "status": "not_verifiable",
+      "evidence": "build.gradle.kts includes firebase-crashlytics dependency and plugin. SecureCrashlyticsTree planted in release builds. Actual crash reporting requires live Firebase project."
+    },
+    {
+      "criterion": "AC-41: Documentation (APK install + Play Console upload)",
+      "status": "not_verifiable",
+      "evidence": "No documentation files found in android/ directory. Would need to verify if README or docs exist elsewhere."
+    },
+    {
+      "criterion": "AC-42: App password wrong 5 times locks for 60s with countdown",
+      "status": "not_verifiable",
+      "evidence": "core:auth is a stub — lockout logic not implemented. Cannot be verified."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "critical",
+      "title": "Task 4 (Biometric Auth + Auto-lock) not implemented despite being marked done",
+      "expected": "core:auth module should contain AuthManager with BiometricPrompt integration, password verification, exponential lockout (60s/120s/300s), auto-lock timers (5min inactivity, 30s background), LockState sealed class, and 8+ unit tests",
+      "actual": "core:auth contains only empty AuthManager stub class (7 bytes: 'class AuthManager'). No unit tests. No decisions.md entry for Task 4. Review reports exist (dc8754c0c) but no implementation commit found in git log for core/auth/ beyond initial project setup (7450be9f0).",
+      "reproduction": "1. cat android/core/auth/src/main/java/com/mcw/core/auth/AuthManager.kt -> empty class. 2. find android/core/auth/src/test -name '*.kt' -> no results. 3. grep 'Task 4' decisions.md -> no results. 4. git log --all -- android/core/auth/ shows only task 1 initial creation."
+    },
+    {
+      "severity": "critical",
+      "title": "Release APK build fails — missing R8 ProGuard rule for slf4j",
+      "expected": "assembleRelease produces a signed/unsigned release APK with R8 minification",
+      "actual": "R8 compilation fails: 'Missing class org.slf4j.impl.StaticLoggerBinder'. The missing_rules.txt file generated by R8 confirms the fix is: -dontwarn org.slf4j.impl.StaticLoggerBinder",
+      "reproduction": "1. cd android && ./gradlew assembleRelease. 2. Observe FAILURE at :app:minifyReleaseWithR8. 3. cat app/build/outputs/mapping/release/missing_rules.txt -> shows the needed rule."
+    },
+    {
+      "severity": "major",
+      "title": "core:auth module has zero test coverage — violates coverage requirement",
+      "expected": "Every source module should have corresponding tests per QA coverage verification rules",
+      "actual": "core:auth has 1 source file (AuthManager.kt) and 0 test files. Since the module is a stub, there is nothing meaningful to test, but this also means the entire authentication feature (biometrics, password lockout, auto-lock) is untested.",
+      "reproduction": "find android/core/auth/src/test -name '*.kt' -> no results"
+    }
+  ],
+  "deferredToPostDeploy": [
+    {
+      "criterion": "AC-35: Offline mode — show last known balances with timestamp",
+      "reason": "Requires device with togglable network to verify full offline UX",
+      "verificationCondition": "Physical Android device or emulator with airplane mode",
+      "verificationSteps": "1. Open app, fetch balances. 2. Enable airplane mode. 3. Verify last balances shown with timestamp. 4. Verify Send button disabled. 5. Pull-to-refresh -> error banner."
+    },
+    {
+      "criterion": "AC-38: QR scanner opens camera",
+      "reason": "Camera hardware required",
+      "verificationCondition": "Physical Android device with camera",
+      "verificationSteps": "1. Open app. 2. Tap Scan QR. 3. Verify camera preview opens. 4. Scan WalletConnect QR from desktop dApp."
+    },
+    {
+      "criterion": "AC-39: WebView loads dex.onout.org and app.aave.com",
+      "reason": "Requires device with network access",
+      "verificationCondition": "Android device/emulator with internet",
+      "verificationSteps": "1. Open dApps tab. 2. Tap dex.onout.org. 3. Verify page loads. 4. Verify window.ethereum injected. 5. Repeat for app.aave.com."
+    },
+    {
+      "criterion": "AC-40: Firebase Crashlytics integration",
+      "reason": "Requires live Firebase project and crash event",
+      "verificationCondition": "APK installed with google-services.json pointing to active Firebase project",
+      "verificationSteps": "1. Install release APK. 2. Trigger a crash or non-fatal error. 3. Check Firebase Crashlytics console for event."
+    },
+    {
+      "criterion": "AC-41: Documentation (APK install + Play Console upload)",
+      "reason": "Documentation files need to be located or created",
+      "verificationCondition": "README or docs directory exists",
+      "verificationSteps": "1. Check android/README.md or docs/ for installation and upload guides."
+    },
+    {
+      "criterion": "AC-36/37/42: Biometric fallback, password lockout, countdown timer",
+      "reason": "core:auth module is a stub — these features are not implemented",
+      "verificationCondition": "Task 4 must be actually implemented first",
+      "verificationSteps": "After Task 4 implementation: 1. Test biometric prompt on device. 2. Fail biometric 3x -> password prompt. 3. Enter wrong password 5x -> 60s lockout with countdown."
+    }
+  ]
+}

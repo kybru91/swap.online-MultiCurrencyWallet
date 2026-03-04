@@ -74,6 +74,7 @@ dependencies {
   implementation("androidx.compose.ui:ui-graphics")
   implementation("androidx.compose.ui:ui-tooling-preview")
   implementation("androidx.compose.material3:material3")
+  implementation("androidx.compose.material:material")
   implementation("androidx.compose.material:material-icons-extended")
   implementation("androidx.activity:activity-compose:1.8.2")
   implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
@@ -94,6 +95,9 @@ dependencies {
 
   // Core KTX
   implementation("androidx.core:core-ktx:1.12.0")
+
+  // BCrypt for password hashing (also in :core:storage, needed here for OnboardingViewModel)
+  implementation("org.mindrot:jbcrypt:0.4")
 
   // Testing
   testImplementation("junit:junit:4.13.2")

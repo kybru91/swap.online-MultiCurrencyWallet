@@ -308,6 +308,13 @@ export const createWalletAppsBridge = ({
     })
   }
 
+  // On explicit disconnect: don't fall back to window.ethereum (MetaMask is still in page
+  // but AppKit/wagmi disconnected). Send internal wallet if available, else empty accounts.
+  const handleExternalWalletDisconnected = () => {
+    const accounts = internalWallet?.address ? [internalWallet.address] : []
+    sendProviderEvent('accountsChanged', accounts)
+  }
+
   const providerForEvents = getEip1193Provider()
   if (providerForEvents?.on) {
     providerForEvents.on('accountsChanged', handleAccountsChanged)
@@ -316,7 +323,7 @@ export const createWalletAppsBridge = ({
 
   if (metamask?.web3connect?.on) {
     metamask.web3connect.on('connected', handleWeb3ProviderUpdated)
-    metamask.web3connect.on('disconnect', handleWeb3ProviderUpdated)
+    metamask.web3connect.on('disconnect', handleExternalWalletDisconnected)
     metamask.web3connect.on('accountChange', handleWeb3ProviderUpdated)
     metamask.web3connect.on('chainChanged', handleWeb3ProviderUpdated)
   }

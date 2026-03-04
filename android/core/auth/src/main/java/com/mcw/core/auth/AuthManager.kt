@@ -189,10 +189,9 @@ class AuthManager @Inject constructor(
         val matches = passwordHasher.checkPassword(password, storedHash)
 
         if (matches) {
-            // Success -- reset all failure state
+            // Success -- reset all failure state including lockout level
             setPersistedInt(KEY_FAILURE_COUNT, 0)
             setPersistedLong(KEY_LOCKOUT_UNTIL, 0L)
-            // Keep lockout level -- it only resets on successful auth
             setPersistedInt(KEY_LOCKOUT_LEVEL, 0)
             biometricFailureCount = 0
             unlock()

@@ -176,7 +176,7 @@ jobs:
             mkdir -p "$UPDATES_DIR"
 
             # Move ZIP file from incoming to shared updates directory
-            mv /home/walletwpmixnet/incoming/mcw-v${{ env.VERSION }}.zip \
+            cp /home/walletwpmixnet/incoming/mcw-v${{ env.VERSION }}.zip \
                "$UPDATES_DIR/"
 
             chmod 644 "$UPDATES_DIR/mcw-v${{ env.VERSION }}.zip"
@@ -184,22 +184,96 @@ jobs:
             echo "WordPress plugin package deployed:"
             ls -lh "$UPDATES_DIR/mcw-v${{ env.VERSION }}.zip"
 
+      - name: Deploy to growup.wpmix.net (WP auto-update source)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            GROWUP_DIR="/home/growup/web/growup.wpmix.net/public_html/wp-content/uploads/multi-currency-wallet-pro"
+            mkdir -p "$GROWUP_DIR"
+
+            # Copy ZIP as the canonical download for WP auto-updater
+            cp /home/walletwpmixnet/incoming/mcw-v${{ env.VERSION }}.zip \
+               "$GROWUP_DIR/multi-currency-wallet-pro.zip"
+            chmod 644 "$GROWUP_DIR/multi-currency-wallet-pro.zip"
+
+            # Write info.json that WP plugin reads for version check
+            cat > "$GROWUP_DIR/info.json" << 'INFOJSON'
+            {
+              "name": "Multi Currency Wallet Pro",
+              "version": "VERSION_PLACEHOLDER",
+              "tested": "6.7",
+              "requires": "5.0",
+              "requires_php": "7.4",
+              "download_url": "https://growup.wpmix.net/wp-content/uploads/multi-currency-wallet-pro/multi-currency-wallet-pro.zip",
+              "last_updated": "TIMESTAMP_PLACEHOLDER",
+              "sections": {
+                "description": "Simplest Multi-currency wallet for WordPress - supports Bitcoin, Ethereum, and ERC20/BEP20 tokens with exchange",
+                "installation": "Upload the plugin files to /wp-content/plugins/multi-currency-wallet-pro/, then activate the plugin through the Plugins menu in WordPress"
+              }
+            }
+            INFOJSON
+
+            # Substitute version and timestamp
+            sed -i "s/VERSION_PLACEHOLDER/${{ env.VERSION }}/g" "$GROWUP_DIR/info.json"
+            sed -i "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%d %H:%M:%S")/g" "$GROWUP_DIR/info.json"
+            chmod 644 "$GROWUP_DIR/info.json"
+
+            echo "growup.wpmix.net updated:"
+            cat "$GROWUP_DIR/info.json"
+
+      - name: Deploy plugin directly to wallet.wpmix.net
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            PLUGIN_DIR="/home/walletwpmixnet/web/wallet.wpmix.net/public_html/wp-content/plugins/multi-currency-wallet-pro"
+
+            # Extract new plugin version directly into plugin directory
+            cd /tmp
+            unzip -o /home/walletwpmixnet/incoming/mcw-v${{ env.VERSION }}.zip -d mcw-unpack-${{ env.VERSION }} > /dev/null
+            rsync -a --delete mcw-unpack-${{ env.VERSION }}/multi-currency-wallet-pro/ "$PLUGIN_DIR/"
+            rm -rf mcw-unpack-${{ env.VERSION }}
+
+            # Ensure the symlink still exists
+            SYMLINK="/home/walletwpmixnet/web/wallet.wpmix.net/public_html/wp-content/plugins/multi-currency-wallet-pro-master"
+            if [ ! -L "$SYMLINK" ]; then
+              ln -s "$PLUGIN_DIR" "$SYMLINK"
+            fi
+
+            echo "wallet.wpmix.net plugin updated to ${{ env.VERSION }}:"
+            grep "MCWALLET_VER\|Version:" "$PLUGIN_DIR/multi-currency-wallet-pro.php" | head -3
+
       - name: Health check
         run: |
-          echo "Waiting 10 seconds for deployment to settle..."
           sleep 10
 
-          # Check info.json is accessible and contains valid JSON
-          RESPONSE=$(curl -sf https://farm.wpmix.net/updates/mcw-info.json 2>/dev/null || echo "")
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://farm.wpmix.net/updates/mcw-info.json || echo "000")
-
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Health check passed (HTTP $HTTP_CODE)"
-            echo "$RESPONSE" | python3 -m json.tool > /dev/null 2>&1 && \
-              echo "✓ info.json is valid JSON" || \
-              echo "⚠ Warning: info.json may not be valid JSON"
+          # Check growup.wpmix.net info.json
+          GU_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://growup.wpmix.net/wp-content/uploads/multi-currency-wallet-pro/info.json || echo "000")
+          if [ "$GU_CODE" = "200" ]; then
+            echo "✓ growup.wpmix.net info.json OK (HTTP $GU_CODE)"
           else
-            echo "⚠ Warning: Health check returned HTTP $HTTP_CODE (non-blocking)"
+            echo "⚠ growup.wpmix.net info.json HTTP $GU_CODE"
+          fi
+
+          # Check wallet.wpmix.net is up
+          WP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://wallet.wpmix.net/ || echo "000")
+          if [ "$WP_CODE" = "200" ]; then
+            echo "✓ wallet.wpmix.net OK (HTTP $WP_CODE)"
+          else
+            echo "⚠ wallet.wpmix.net HTTP $WP_CODE"
+          fi
+
+          # Check farm.wpmix.net info.json
+          FM_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://farm.wpmix.net/updates/mcw-info.json || echo "000")
+          if [ "$FM_CODE" = "200" ]; then
+            echo "✓ farm.wpmix.net mcw-info.json OK (HTTP $FM_CODE)"
+          else
+            echo "⚠ farm.wpmix.net mcw-info.json HTTP $FM_CODE"
           fi
 
       - name: Notify completion

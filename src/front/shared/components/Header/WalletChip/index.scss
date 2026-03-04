@@ -1,3 +1,7 @@
+.wrapper {
+  position: relative;
+}
+
 .chip {
   @include ff-bold;
   display: flex;
@@ -34,6 +38,10 @@
   color: var(--color-brand);
   @include ellipsis;
   max-width: 90px;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .connectText {
@@ -44,6 +52,38 @@
   font-size: 0.65rem;
   color: var(--color-notice);
   margin-left: 2px;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 190px;
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--color);
+  transition: background 0.12s;
+
+  &:hover {
+    background: var(--color-pale);
+  }
+
+  span {
+    font-weight: 600;
+  }
 }
 
 @include media-mobile {
@@ -57,5 +97,10 @@
 
   .chip {
     padding: 5px 10px;
+  }
+
+  .dropdown {
+    right: -10px;
+    min-width: 170px;
   }
 }

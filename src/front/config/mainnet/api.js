@@ -27,8 +27,6 @@ export default {
   bscscan_ApiKey: 'WI4QEJSV19U3TF2H1DPQ2HR6712HW4MYKJ',
   maticscan: 'https://api.etherscan.io/v2/api?chainid=137',
   polygon_ApiKey: '8S2R45ZWG94HI7YK9RCXSK4VCASJ4XVA15',
-  ftmscan: 'https://api.ftmscan.com/api',
-  ftm_ApiKey: 'J39MXI2KQ7YWFR3JGYHPVYK1MIH132QSXP',
   avaxscan: 'https://api.etherscan.io/v2/api?chainid=43114',
   avax_ApiKey: 'BEDYVGMKPM4HXIVD16B1Z66D5R75D9AHNC',
   movrscan: 'https://api.etherscan.io/v2/api?chainid=1285',
@@ -47,9 +45,6 @@ export default {
   multisig: 'https://multisig.onout.org',
   txinfo: 'https://txinfo.onout.org',
   noxon: 'https://noxon.wpmix.net',
-  phiscan: 'https://phiscan.com/api',
-  fkwscan: 'https://explorer.fokawa.com/api',
-  phpxscan: 'https://explorer.phpx.network/api',
   WalletConnectProjectId: 'a23677c4af3139b4eccb52981f76ad94',
   InfuraApiKey: 'fdd4494101ed4a28b41bb66d7fe9c692',
 }

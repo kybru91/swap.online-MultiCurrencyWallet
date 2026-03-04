@@ -50,14 +50,6 @@ export default {
     rpcUrls: [web3.xdai_provider],
     blockExplorerUrls: [link.xdai]
   },
-  FTM: {
-    currency: 'FTM',
-    chainId: '0xfa2',
-    networkVersion: 4002,
-    chainName: 'Fantom Testnet',
-    rpcUrls: [web3.ftm_provider],
-    blockExplorerUrls: [link.ftmscan],
-  },
   AVAX: {
     currency: 'AVAX',
     chainId: '0xa869',
@@ -89,38 +81,5 @@ export default {
     chainName: 'AME Chain Testnet',
     rpcUrls: [web3.ame_provider],
     blockExplorerUrls: [link.amescan],
-  },
-  PHI_V1: {
-    currency: 'PHI_V1',
-    chainId: '',
-    networkVersion: 0,
-    chainName: 'PHI Network',
-    rpcUrls: [web3.phi_v1_provider],
-    blockExplorerUrls: [link.phi_v1Explorer],
-  },
-  PHI: {
-    currency: 'PHI',
-    chainId: '',
-    networkVersion: 0,
-    chainName: 'PHI Network',
-    rpcUrls: [web3.phi_provider],
-    blockExplorerUrls: [link.phi_Explorer],
-  },
-  FKW: {
-    currency: 'FKW',
-    chainId: '0x9F75',
-    networkVersion: 40821,
-    chainName: 'FKW Network',
-    rpcUrls: [web3.fwk_provider],
-    blockExplorerUrls: [link.fkw_Explorer],
-  },
-  PHPX: {
-    currency: 'PHPX',
-    chainId: '0xCE1F',
-    networkVersion: 52767,
-    chainName: 'PHPX Network',
-    rpcUrls: [web3.phpx_provider],
-    blockExplorerUrls: [link.phpx_Explorer],
-    hasWalletConnect: false,
   },
 }

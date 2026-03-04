@@ -36,14 +36,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import com.mcw.wallet.BuildConfig
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -86,7 +84,6 @@ fun SettingsScreen(
   onHideBackup: () -> Unit = {},
   onDismissError: () -> Unit = {},
 ) {
-  val snackbarHostState = remember { SnackbarHostState() }
   val context = LocalContext.current
 
   // Set FLAG_SECURE when mnemonic is shown to prevent screenshots
@@ -114,7 +111,6 @@ fun SettingsScreen(
         },
       )
     },
-    snackbarHost = { SnackbarHost(snackbarHostState) },
   ) { innerPadding ->
     Column(
       modifier = Modifier
@@ -324,8 +320,8 @@ fun SettingsScreen(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
       ) {
         Column(modifier = Modifier.padding(16.dp)) {
-          InfoRow("App Name", "MCW Wallet")
-          InfoRow("Version", "1.0.0")
+          InfoRow("App Name", BuildConfig.APP_NAME)
+          InfoRow("Version", BuildConfig.VERSION_NAME)
           InfoRow("Active Network", state.selectedNetwork.displayName)
           InfoRow("Chain ID", state.selectedNetwork.chainId.toString())
         }

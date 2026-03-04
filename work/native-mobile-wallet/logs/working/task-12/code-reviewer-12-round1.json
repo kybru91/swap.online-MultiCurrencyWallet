@@ -1,0 +1,32 @@
+{
+  "reviewer": "code-reviewer-12",
+  "round": 1,
+  "timestamp": "2026-03-05T12:00:00Z",
+  "verdict": "APPROVE_WITH_MINOR",
+  "summary": "Transaction history implementation is well-structured with proper API parsing, direction detection, and UI components. Tests are comprehensive. Two minor findings.",
+  "findings": [
+    {
+      "severity": "minor",
+      "file": "android/core/btc/src/main/java/com/mcw/core/btc/BtcManager.kt",
+      "line": "396-397",
+      "issue": "SATOSHI_DIVISOR accessed from instance method via companion object implicit reference. This works in Kotlin but the variable was defined as private val in companion object AND the instance method fetchBalance() at line 82-86 also accesses it directly. After the refactor that moved the companion object, both instance methods and companion parseBtcTxRefs now use it correctly via implicit companion access. No actual bug, but worth verifying the original fetchBalance still compiles.",
+      "suggestion": "Verified: fetchBalance at line 82-86 uses SATOSHI_DIVISOR which is still in the companion object. No change needed."
+    },
+    {
+      "severity": "minor",
+      "file": "android/app/src/main/java/com/mcw/wallet/ui/history/HistoryScreen.kt",
+      "line": "258-261",
+      "issue": "DirectionIcon uses Triple destructuring pattern with MaterialTheme.colorScheme which is only available inside a @Composable context. The Triple construction happens correctly inside the @Composable function, so this is fine. However, the destructuring syntax `val (icon, tint, description) = ...` requires Triple.component1/2/3 which Kotlin Triple supports natively.",
+      "suggestion": "No change needed. Verified correct usage."
+    }
+  ],
+  "approved_files": [
+    "android/core/network/src/main/java/com/mcw/core/network/TransactionRecord.kt",
+    "android/core/network/src/main/java/com/mcw/core/network/api/BlockcypherApi.kt",
+    "android/core/btc/src/main/java/com/mcw/core/btc/BtcManager.kt",
+    "android/core/evm/src/main/java/com/mcw/core/evm/EvmManager.kt",
+    "android/app/src/main/java/com/mcw/wallet/ui/history/HistoryScreen.kt",
+    "android/app/src/main/java/com/mcw/wallet/ui/history/HistoryUiState.kt",
+    "android/app/src/main/java/com/mcw/wallet/ui/history/HistoryViewModel.kt"
+  ]
+}

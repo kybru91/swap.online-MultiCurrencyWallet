@@ -1,11 +1,9 @@
 name: Build WordPress plugin
 
 on:
-  # Trigger the workflow on push or pull request,
-  # but only for the master branch
-  push:
-    branches:
-      - master
+  # Legacy: pushed builds to swaponline/WalletWpPlugin GitHub repo.
+  # Replaced by deploy.yml (SSH deploy + ZIP). Keep for manual runs only.
+  workflow_dispatch:
 
 jobs:
   build:

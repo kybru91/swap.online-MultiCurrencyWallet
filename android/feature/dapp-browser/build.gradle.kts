@@ -73,6 +73,8 @@ dependencies {
   testImplementation("org.mockito:mockito-core:5.8.0")
   testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+  // org.json stub for unit tests (Android provides this at runtime)
+  testImplementation("org.json:json:20231013")
   androidTestImplementation("androidx.test.ext:junit:1.1.5")
   androidTestImplementation("androidx.test:runner:1.5.2")
 }

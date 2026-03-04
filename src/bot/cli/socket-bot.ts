@@ -22,8 +22,8 @@ class SocketBot {
 
   async until(_event) {
     return new Promise (resolve => {
-      this.ws.on('message', mess => {
-        mess = JSON.parse(mess)
+      this.ws.on('message', (rawMess) => {
+        const mess = JSON.parse(rawMess as string)
 
         if (mess.type === _event) resolve(mess.payload)
         if (mess.type === _event) console.dir(mess)

@@ -1,6 +1,12 @@
 import WebSocket from 'ws'
 import http from 'http'
 
+declare module 'ws' {
+  interface WebSocket {
+    isAlive: boolean
+  }
+}
+
 import { util } from 'swap.app'
 
 

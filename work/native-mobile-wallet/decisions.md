@@ -292,3 +292,25 @@ All findings fixed in commit a42dd7b7d.
 - RPC validation: HTTPS allowed, HTTP/file/empty rejected, private IPs (192.168/10.0/172.16/127.0/localhost) all blocked
 - Secret-safe logging: WIF keys, ETH hex keys, mnemonics, bcrypt hashes all redacted in sanitizer output
 - White-label: APP_NAME and APP_ID configurable via Gradle properties, no hardcoded branding
+
+## Task 12: Transaction History (Blockcypher BTC + Etherscan EVM)
+
+**Status:** Done
+**Commit:** c824b2a53
+**Agent:** history-engineer
+**Summary:** Implemented transaction history fetching and display across all chains. Core layer: TransactionRecord + TxDirection shared data model in :core:network, Blockcypher getAddressTransactions API with txref grouping and direction detection (tx_input_n == -1 for IN, >= 0 for OUT, both for SELF), Etherscan API integration with case-insensitive address comparison, fee calculation (gasUsed * gasPrice), and error/failed tx detection. UI layer: HistoryScreen composable with pull-to-refresh, LazyColumn with expand/collapse detail view, direction icons, color-coded amounts. HistoryViewModel merges all chains and sorts by timestamp desc with partial error tolerance.
+**Deviations:** Blockcypher txrefs do not include counterparty addresses (only the queried address's involvement). The counterparty field uses the wallet address as placeholder; full tx data fetch for counterparty can be added later. Blockcypher txrefs also lack per-transaction fee data, so BTC fee shows as 0.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer-12: APPROVE_WITH_MINOR (2 info, no blocking issues) -> [logs/working/task-12/code-reviewer-12-round1.json]
+- test-reviewer-12: APPROVE (50+ assertions, all edge cases covered) -> [logs/working/task-12/test-reviewer-12-round1.json]
+
+**Verification:**
+- `./gradlew :core:btc:test :core:evm:test :app:testDebugUnitTest` -> BUILD SUCCESSFUL, all tests passed
+- BTC direction: tx_input_n==-1 -> IN, >=0 -> OUT, both -> SELF
+- EVM direction: case-insensitive from/to comparison, failed tx (isError=1) detected
+- Multi-chain merge: BTC+ETH+BNB sorted by timestamp desc
+- Formatting: hash truncation, min 2 decimals, 1000+ confirmations capped
+- Offline mode: null from API -> error banner when all chains fail, partial results shown otherwise

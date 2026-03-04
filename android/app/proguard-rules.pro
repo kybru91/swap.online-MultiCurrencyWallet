@@ -46,3 +46,4 @@
 # Kotlin
 -keep class kotlin.** { *; }
 -dontwarn kotlin.**
+-dontwarn org.slf4j.impl.StaticLoggerBinder

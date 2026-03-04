@@ -23,7 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import com.mcw.wallet.ui.stub.DAppBrowserStubScreen
 import com.mcw.wallet.ui.stub.DAppsTabScreen
 import com.mcw.wallet.ui.stub.HistoryStubScreen
-import com.mcw.wallet.ui.stub.SendStubScreen
+import com.mcw.wallet.ui.send.SendScreen
 import com.mcw.wallet.ui.stub.SettingsStubScreen
 import com.mcw.wallet.ui.wallet.WalletScreen
 
@@ -137,9 +137,9 @@ fun WalletApp(hasWallet: Boolean = false) {
           )
         }
 
-        // Send screen (stub)
+        // Send screen — real composable, ViewModel wired in integration phase
         composable(NavRoutes.SEND) {
-          SendStubScreen(
+          SendScreen(
             onNavigateBack = { navController.popBackStack() }
           )
         }

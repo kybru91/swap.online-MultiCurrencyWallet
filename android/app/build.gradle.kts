@@ -99,6 +99,9 @@ dependencies {
   // BCrypt for password hashing (also in :core:storage, needed here for OnboardingViewModel)
   implementation("org.mindrot:jbcrypt:0.4")
 
+  // BouncyCastle for EIP-55 address checksum (Keccak-256) in SendViewModel
+  implementation("org.bouncycastle:bcprov-jdk18on:1.77")
+
   // Testing
   testImplementation("junit:junit:4.13.2")
   testImplementation("org.mockito:mockito-core:5.8.0")

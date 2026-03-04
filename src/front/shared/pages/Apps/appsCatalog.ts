@@ -18,6 +18,7 @@ export type WalletApp = {
 }
 
 const EXTERNAL_ALLOWED_HOSTS = new Set([
+  'appsource.github.io',
   'dex.onout.org',
   'polyfactory.wpmix.net',
   'farm.wpmix.net',
@@ -44,7 +45,7 @@ export const walletAppsCatalog: WalletApp[] = [
     description: 'Onout DEX opened inside wallet container for seamless swap flow.',
     iconSymbol: 'OD',
     cardImage: imgDex,
-    routeUrl: 'https://dex.onout.org/?walletBridge=swaponline',
+    routeUrl: 'https://appsource.github.io/dex/?walletBridge=swaponline',
     supportedChains: ['Ethereum', 'BSC', 'Polygon'],
     walletBridge: 'eip1193',
   },
@@ -63,10 +64,11 @@ export const walletAppsCatalog: WalletApp[] = [
     id: 'farm-factory',
     title: 'FarmFactory',
     menuTitle: 'FarmFactory',
-    description: 'Yield farming and liquidity pools. Stake LP tokens, earn rewards on BSC and Ethereum.',
+    description:
+      'Yield farming and liquidity pools. Stake LP tokens, earn rewards on BSC and Ethereum.',
     iconSymbol: 'FF',
     cardImage: imgFarmFactory,
-    routeUrl: 'https://farm.wpmix.net/?walletBridge=swaponline',
+    routeUrl: 'https://appsource.github.io/farm/?walletBridge=swaponline',
     supportedChains: ['BSC', 'Ethereum'],
     walletBridge: 'eip1193',
   },
@@ -77,7 +79,7 @@ export const walletAppsCatalog: WalletApp[] = [
     description: 'Token launchpad for IDO and IEO sales. Participate in new DeFi project launches.',
     iconSymbol: 'IL',
     cardImage: imgLaunchpad,
-    routeUrl: 'https://launchpad.onout.org/?walletBridge=swaponline',
+    routeUrl: 'https://appsource.github.io/launchpad/?walletBridge=swaponline',
     supportedChains: ['Ethereum', 'BSC', 'Polygon'],
     walletBridge: 'eip1193',
   },
@@ -88,7 +90,7 @@ export const walletAppsCatalog: WalletApp[] = [
     description: 'On-chain lottery with provably fair draws. Buy tickets, win crypto prizes.',
     iconSymbol: 'CL',
     cardImage: imgLottery,
-    routeUrl: 'https://lottery.onout.org/?walletBridge=swaponline',
+    routeUrl: 'https://appsource.github.io/lottery/?walletBridge=swaponline',
     supportedChains: ['Ethereum', 'BSC'],
     walletBridge: 'eip1193',
   },
@@ -106,7 +108,7 @@ export const getWalletAppById = (appId?: string): WalletApp | undefined => {
 
 export const resolveWalletAppUrl = (
   app: WalletApp,
-  currentLocation: Location = window.location,
+  currentLocation: Location = window.location
 ): string => {
   if (!app.isInternal) {
     return app.routeUrl
@@ -119,7 +121,7 @@ export const resolveWalletAppUrl = (
 
 export const isAllowedWalletAppUrl = (
   appUrl: string,
-  currentLocation: Location = window.location,
+  currentLocation: Location = window.location
 ): boolean => {
   if (!appUrl) {
     return false

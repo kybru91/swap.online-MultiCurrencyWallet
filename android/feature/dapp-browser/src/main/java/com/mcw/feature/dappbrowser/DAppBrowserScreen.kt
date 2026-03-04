@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -174,22 +172,20 @@ private fun createSecureWebView(
       },
     )
 
-    // Add the JS bridge
+    // Add the JS bridge with self-reference for response dispatch
+    // Using array wrapper to allow lambda capture of mutable reference
+    val bridgeHolder = arrayOfNulls<EthereumBridge>(1)
     val bridge = EthereumBridge(
       webView = this,
       originValidator = viewModel.originValidator,
       rateLimiter = viewModel.rateLimiter,
-      approvedOrigin = "", // Set when navigation is approved
+      approvedOrigin = url ?: "",
       onRequest = { callbackId, method, params ->
-        viewModel.handleRequest(callbackId, method, params, bridge = EthereumBridge(
-          webView = this,
-          originValidator = viewModel.originValidator,
-          rateLimiter = viewModel.rateLimiter,
-          approvedOrigin = url ?: "",
-          onRequest = { _, _, _ -> }, // Not used recursively
-        ))
+        val b = bridgeHolder[0] ?: return@EthereumBridge
+        viewModel.handleRequest(callbackId, method, params, bridge = b)
       },
     )
+    bridgeHolder[0] = bridge
     addJavascriptInterface(bridge, EthereumBridge.BRIDGE_NAME)
   }
 }

@@ -101,8 +101,13 @@ class EthereumBridge(
    * @param message human-readable error message
    */
   fun sendError(callbackId: Int, code: Int, message: String) {
-    // Escape message for JS string literal
-    val escaped = message.replace("\\", "\\\\").replace("'", "\\'").replace("\"", "\\\"")
+    // Escape message for JS string literal (prevent injection)
+    val escaped = message
+      .replace("\\", "\\\\")
+      .replace("'", "\\'")
+      .replace("\"", "\\\"")
+      .replace("\n", "\\n")
+      .replace("\r", "\\r")
     val js = "window._mcwCallback($callbackId, {code: $code, message: '$escaped'}, null)"
     webView.post { webView.evaluateJavascript(js, null) }
   }
@@ -110,10 +115,15 @@ class EthereumBridge(
   /**
    * Emit an EIP-1193 event to the JS provider.
    *
+   * Event names are restricted to a known set to prevent JS injection.
+   *
    * @param event the event name (e.g., "chainChanged", "accountsChanged")
    * @param data the event data (JSON-encoded)
    */
   fun emitEvent(event: String, data: String) {
+    // Restrict event names to known EIP-1193 events to prevent JS injection
+    val allowedEvents = setOf("chainChanged", "accountsChanged", "connect", "disconnect")
+    if (event !in allowedEvents) return
     val js = "window._mcwEvent('$event', $data)"
     webView.post { webView.evaluateJavascript(js, null) }
   }

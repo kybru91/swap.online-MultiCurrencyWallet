@@ -509,7 +509,13 @@ const getWallets = (options: IUniversalObj = {}) => {
 
   const appKitAccount = getAccount(wagmiConfig)
   const connectedWalletData = metamaskConnected && appKitAccount.address
-    ? { address: appKitAccount.address, isMetamask: true, isConnected: true, currency: 'ETH' }
+    ? {
+        ...ethData,
+        address: appKitAccount.address,
+        isMetamask: true,
+        isConnected: true,
+        currency: 'ETH',
+      }
     : null
 
   const allData = [

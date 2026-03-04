@@ -19,8 +19,7 @@ declare global {
 
   interface Window {
     [key: string]: any
-    // any absorbs @reown/appkit's Record<string,unknown> in interface merge
-    ethereum?: EthereumProvider | any
+    ethereum?: EthereumProvider
   }
 
   interface Navigator {

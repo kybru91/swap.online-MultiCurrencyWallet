@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Unit tests for MCW wallet-apps-bridge-client.js
  *
@@ -5,6 +6,10 @@
  * host via postMessage. The bridge client is an IIFE that only runs inside
  * an iframe (window.parent !== window), so we mock the iframe context and
  * re-evaluate the script for each test to get a clean provider instance.
+ *
+ * @ts-nocheck is required because window.ethereum is injected via eval() at
+ * runtime, so its type is unknown to TypeScript. @reown/appkit's type
+ * declaration (Record<string,unknown>) conflicts with the dynamic JS object.
  */
 import * as fs from 'fs'
 import * as path from 'path'

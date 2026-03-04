@@ -221,3 +221,27 @@ All actionable findings addressed in fix commit 3def5621d.
 - Session expiry: 25h old session removed, 23h59m retained, exactly 24h removed
 - Relay validation: walletconnect.com allowed, custom.relay.com rejected, subdomain attacks rejected
 - Persistence: approve session -> restart -> session restored from EncryptedSharedPreferences
+
+## Task 10: dApp Browser + window.ethereum EIP-1193 Provider
+
+**Status:** Done
+**Commit:** b476afd74, a42dd7b7d
+**Agent:** dapp-engineer
+**Summary:** Implemented WebView-based dApp browser in :feature:dapp-browser with injected window.ethereum EIP-1193 provider (Object.freeze for tamper protection), JS-to-Native bridge via single @JavascriptInterface request() method, origin validation per call, rate limiting (10 calls/sec atomic sliding window), domain allowlist policy (unknown domains blocked), gas thresholds (>1M warning, >15M reject), transaction confirmation dialog with function signature decoding (transfer/approve/swap), unlimited approval (MAX_UINT256) warnings, eth_sign rejection, wallet_addEthereumChain chain ID allowlist (1/56/137), WebView security hardening per Decision 9, EIP-6963 provider announcement, and URL validation (HTTPS only, private IPs blocked).
+**Deviations:** None. All security settings, method support, chain restrictions, and gas thresholds match tech-spec Decision 9 exactly.
+
+**Reviews:**
+
+*Round 1:*
+- code-reviewer: 2 findings (1 minor bridge reference fix, 1 low unused imports), 2 info -> [logs/working/task-10/code-reviewer-10-round1.json]
+- security-auditor: 2 findings (1 minor event name injection fix, 1 minor error message escaping), 4 info -> [logs/working/task-10/security-auditor-10-round1.json]
+- test-reviewer: OK (4 info, all 7 TDD anchors pass) -> [logs/working/task-10/test-reviewer-10-round1.json]
+
+All findings fixed in commit a42dd7b7d.
+
+**Verification:**
+- `./gradlew :feature:dapp-browser:test` -> BUILD SUCCESSFUL, 70 tests passed (35 debug + 35 release, 0 failures)
+- All 7 TDD anchors pass: injection (Object.freeze + window.ethereum), origin validation, rate limiting (15 calls -> 5 queued), gas warning (1M+1), gas reject (15M+1), eth_sign rejection, chain allowlist (1/56/137 allowed, 999 rejected)
+- WebView security: allowFileAccess=false, mixedContentMode=MIXED_CONTENT_NEVER_ALLOW, geolocationEnabled=false confirmed
+- URL validation: https allowed, http/file/javascript/data blocked, private IPs blocked
+- Function decoding: transfer/approve/swap selectors decoded, MAX_UINT256 unlimited approval detected

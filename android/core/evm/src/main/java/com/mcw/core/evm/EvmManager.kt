@@ -1,5 +1,6 @@
 package com.mcw.core.evm
 
+import com.mcw.core.network.api.CoinGeckoApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.web3j.abi.FunctionEncoder
@@ -18,6 +19,7 @@ import org.web3j.utils.Numeric
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
+import javax.inject.Inject
 
 /**
  * EVM operations: balance fetching, ERC20 token balances, gas estimation,
@@ -34,7 +36,7 @@ import java.math.RoundingMode
  * Fiat prices are fetched from CoinGecko free API and parsed via
  * [parseCoinGeckoPrices].
  */
-class EvmManager {
+class EvmManager @Inject constructor() {
 
   companion object {
     /** Wei per ETH (10^18) */
@@ -216,8 +218,8 @@ class EvmManager {
     return try {
       withContext(Dispatchers.IO) {
         val response = web3j.ethGetBalance(address, DefaultBlockParameterName.LATEST).send()
-        val weiHex = "0x" + response.balance.toString(16)
-        parseBalanceFromWei(weiHex)
+        val wei = response.balance
+        BigDecimal(wei).setScale(ETH_DECIMALS).divide(WEI_PER_ETH, ETH_DECIMALS, RoundingMode.UNNECESSARY)
       }
     } catch (e: Exception) {
       // Offline mode: return null, UI shows "N/A"
@@ -282,7 +284,7 @@ class EvmManager {
    * @return Map of symbol to USD price, or null on error
    */
   suspend fun fetchFiatPrices(
-    coinGeckoApi: com.mcw.core.network.api.CoinGeckoApi,
+    coinGeckoApi: CoinGeckoApi,
     symbols: List<String>,
   ): Map<String, BigDecimal>? {
     return try {
@@ -367,6 +369,10 @@ class EvmManager {
     signedTxHex: String,
     web3j: Web3j,
   ): String? {
+    // Basic validation: must be 0x-prefixed hex string with even length
+    if (!signedTxHex.startsWith("0x") || signedTxHex.length < 4 || signedTxHex.length % 2 != 0) {
+      return null
+    }
     return try {
       withContext(Dispatchers.IO) {
         val response = web3j.ethSendRawTransaction(signedTxHex).send()

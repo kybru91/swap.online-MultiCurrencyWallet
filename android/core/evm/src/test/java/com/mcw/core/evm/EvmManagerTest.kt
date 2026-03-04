@@ -520,6 +520,57 @@ class EvmManagerTest {
     )
   }
 
+  @Test
+  fun testSignTransaction_invalidKeyReturnsNull() {
+    val tx = EvmManager.buildTransaction(
+      nonce = BigInteger.ZERO,
+      to = "0xabcdef1234567890abcdef1234567890abcdef12",
+      value = BigInteger("1000000000000000000"),
+      gasPrice = BigInteger("20000000000"),
+      gasLimit = BigInteger.valueOf(21000),
+      data = null,
+      chainId = 1L,
+    )
+
+    val signed = EvmManager.signTransaction(tx, "", 1L)
+    assertNull(
+      "Empty private key should return null",
+      signed
+    )
+  }
+
+  @Test
+  fun testSignTransaction_malformedKeyReturnsNull() {
+    val tx = EvmManager.buildTransaction(
+      nonce = BigInteger.ZERO,
+      to = "0xabcdef1234567890abcdef1234567890abcdef12",
+      value = BigInteger("1000000000000000000"),
+      gasPrice = BigInteger("20000000000"),
+      gasLimit = BigInteger.valueOf(21000),
+      data = null,
+      chainId = 1L,
+    )
+
+    val signed = EvmManager.signTransaction(tx, "not-a-hex-key", 1L)
+    assertNull(
+      "Malformed private key should return null",
+      signed
+    )
+  }
+
+  // ===== Broadcast validation =====
+
+  @Test
+  fun testBroadcast_invalidHexReturnsNull() = runTest {
+    val mockWeb3j = mock<Web3j>()
+    // No 0x prefix
+    assertNull("Missing 0x prefix should return null", evmManager.broadcastTransaction("abcdef", mockWeb3j))
+    // Odd length
+    assertNull("Odd-length hex should return null", evmManager.broadcastTransaction("0xabc", mockWeb3j))
+    // Too short
+    assertNull("Too short hex should return null", evmManager.broadcastTransaction("0x", mockWeb3j))
+  }
+
   // ===== CoinGecko symbol mapping =====
 
   @Test
@@ -623,7 +674,7 @@ class EvmManagerTest {
     whenever(mockWeb3j.ethSendRawTransaction(any())).thenReturn(mockRequest)
     whenever(mockRequest.send()).thenThrow(RuntimeException("Network error"))
 
-    val result = evmManager.broadcastTransaction("0xsigned_tx_hex", mockWeb3j)
+    val result = evmManager.broadcastTransaction("0xf86c0a8504a817c80082520894abcdef1234567890abcdef1234567890abcdef12880de0b6b3a764000080", mockWeb3j)
     assertNull(
       "Broadcast should return null on error (offline mode)",
       result
@@ -640,7 +691,7 @@ class EvmManagerTest {
     whenever(mockRequest.send()).thenReturn(sendResponse)
     whenever(mockWeb3j.ethSendRawTransaction(any())).thenReturn(mockRequest)
 
-    val result = evmManager.broadcastTransaction("0xsigned_tx_hex", mockWeb3j)
+    val result = evmManager.broadcastTransaction("0xf86c0a8504a817c80082520894abcdef1234567890abcdef1234567890abcdef12880de0b6b3a764000080", mockWeb3j)
     assertEquals(
       "Broadcast should return tx hash",
       "0xabc123hash",

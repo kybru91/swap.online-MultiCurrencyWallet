@@ -6,6 +6,7 @@ import com.mcw.core.btc.BtcManager
 import com.mcw.core.evm.EvmManager
 import com.mcw.core.network.api.CoinGeckoApi
 import com.mcw.core.storage.SecureStorage
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -88,46 +89,40 @@ class WalletViewModel(
     viewModelScope.launch {
       _uiState.update { it.copy(isLoading = true, error = null) }
 
-      var hasError = false
       val newBalances = mutableMapOf<String, BigDecimal>()
 
-      // Fetch BTC balance
-      try {
-        val btcBalance = btcManager.fetchBalance(btcAddress)
-        newBalances["BTC"] = btcBalance.balance
-      } catch (e: Exception) {
-        hasError = true
-      }
-
-      // Fetch EVM balances (ETH, BNB, MATIC share the same address)
+      // All requests in parallel: BTC + ETH + BNB + MATIC + fiat prices
       val fetcher = evmBalanceFetcher
-      for (currency in listOf("ETH", "BNB", "MATIC")) {
-        try {
-          if (fetcher != null) {
-            val balance = fetcher.fetchBalance(ethAddress, currency)
-            if (balance != null) {
-              newBalances[currency] = balance
-            } else {
-              hasError = true
-            }
-          } else {
-            hasError = true
-          }
-        } catch (e: Exception) {
-          hasError = true
-        }
+      val btcDeferred = async {
+        runCatching { btcManager.fetchBalance(btcAddress).balance }.getOrNull()
+      }
+      val ethDeferred = async {
+        fetcher?.let { runCatching { it.fetchBalance(ethAddress, "ETH") }.getOrNull() }
+      }
+      val bnbDeferred = async {
+        fetcher?.let { runCatching { it.fetchBalance(ethAddress, "BNB") }.getOrNull() }
+      }
+      val maticDeferred = async {
+        fetcher?.let { runCatching { it.fetchBalance(ethAddress, "MATIC") }.getOrNull() }
+      }
+      val pricesDeferred = async {
+        runCatching {
+          evmManager.fetchFiatPrices(coinGeckoApi, CURRENCIES.map { it.symbol })
+        }.getOrNull()
       }
 
-      // Fetch fiat prices
-      val prices = try {
-        evmManager.fetchFiatPrices(
-          coinGeckoApi,
-          CURRENCIES.map { it.symbol }
-        )
-      } catch (e: Exception) {
-        hasError = true
-        null
-      }
+      val btcResult = btcDeferred.await()
+      val ethResult = ethDeferred.await()
+      val bnbResult = bnbDeferred.await()
+      val maticResult = maticDeferred.await()
+      val prices = pricesDeferred.await()
+
+      btcResult?.let { newBalances["BTC"] = it }
+      ethResult?.let { newBalances["ETH"] = it }
+      bnbResult?.let { newBalances["BNB"] = it }
+      maticResult?.let { newBalances["MATIC"] = it }
+
+      val hasError = newBalances.isEmpty()
 
       // Build UI balance list
       val previousBalances = _uiState.value.balances

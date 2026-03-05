@@ -21,6 +21,8 @@ import java.util.Locale
 import java.util.TimeZone
 import javax.inject.Inject
 import kotlin.math.max
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Bitcoin operations: balance fetching, UTXO selection, fee estimation,
@@ -60,9 +62,9 @@ class BtcManager @Inject constructor(
    * @param address BTC address (P2PKH format)
    * @return BtcBalance with confirmed and unconfirmed amounts in BTC
    */
-  suspend fun fetchBalance(address: String): BtcBalance {
+  suspend fun fetchBalance(address: String): BtcBalance = withContext(Dispatchers.IO) {
     val response = bitpayApi.getBalance(address)
-    return BtcBalance(
+    BtcBalance(
       balance = BigDecimal(response.balance).divide(SATOSHI_DIVISOR, 8, RoundingMode.HALF_EVEN),
       unconfirmed = BigDecimal(response.unconfirmed).divide(SATOSHI_DIVISOR, 8, RoundingMode.HALF_EVEN),
     )
@@ -77,9 +79,9 @@ class BtcManager @Inject constructor(
    * @param address BTC address
    * @return list of unspent outputs available for spending
    */
-  suspend fun fetchUnspentOutputs(address: String): List<UnspentOutput> {
+  suspend fun fetchUnspentOutputs(address: String): List<UnspentOutput> = withContext(Dispatchers.IO) {
     val response = bitpayApi.getUnspentOutputs(address)
-    return response.map { utxo ->
+    response.map { utxo ->
       UnspentOutput(
         txid = utxo.txid,
         vout = utxo.vout,
@@ -210,8 +212,8 @@ class BtcManager @Inject constructor(
    *
    * @return BtcFeeRates with fast/normal/slow rates in sat/KB
    */
-  suspend fun estimateFees(): BtcFeeRates {
-    return try {
+  suspend fun estimateFees(): BtcFeeRates = withContext(Dispatchers.IO) {
+    return@withContext try {
       val response = blockcypherApi.getFeeRates()
       BtcFeeRates(
         fast = response.highFeePerKb,
@@ -299,8 +301,8 @@ class BtcManager @Inject constructor(
    * @return transaction ID (txid) on success
    * @throws BroadcastException if the API returns an error
    */
-  suspend fun broadcastTransaction(signedTxHex: String): String {
-    return try {
+  suspend fun broadcastTransaction(signedTxHex: String): String = withContext(Dispatchers.IO) {
+    return@withContext try {
       val response = bitpayApi.broadcastTransaction(BitpayBroadcastRequest(rawTx = signedTxHex))
       response.txid
     } catch (e: Exception) {
@@ -325,8 +327,8 @@ class BtcManager @Inject constructor(
    * @param address BTC address (P2PKH format)
    * @return list of TransactionRecord sorted by timestamp descending, or null on error
    */
-  suspend fun fetchTransactionHistory(address: String): List<TransactionRecord>? {
-    return try {
+  suspend fun fetchTransactionHistory(address: String): List<TransactionRecord>? = withContext(Dispatchers.IO) {
+    return@withContext try {
       val response = blockcypherApi.getAddressTransactions(address)
 
       val confirmedTxRefs = response.txrefs.orEmpty()
@@ -334,7 +336,7 @@ class BtcManager @Inject constructor(
       val allRefs = confirmedTxRefs + unconfirmedTxRefs
 
       if (allRefs.isEmpty()) {
-        return emptyList()
+        return@withContext emptyList()
       }
 
       // Group by tx_hash — a single transaction can appear multiple times

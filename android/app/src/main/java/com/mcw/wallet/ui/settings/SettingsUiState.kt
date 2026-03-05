@@ -38,4 +38,9 @@ data class SettingsUiState(
 
   /** General error message */
   val errorMessage: String? = null,
+
+  // Debug report
+  val isDebugSending: Boolean = false,
+  val debugReportUrl: String? = null,
+  val debugError: String? = null,
 )

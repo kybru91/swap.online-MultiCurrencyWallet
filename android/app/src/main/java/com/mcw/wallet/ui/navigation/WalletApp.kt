@@ -11,20 +11,26 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.mcw.core.storage.SecureStorage
+import com.mcw.wallet.MCWalletApplication
 import com.mcw.wallet.ui.history.HistoryScreen
 import com.mcw.wallet.ui.stub.DAppBrowserStubScreen
 import com.mcw.wallet.ui.stub.DAppsTabScreen
 import com.mcw.wallet.ui.send.SendScreen
 import com.mcw.wallet.ui.settings.SettingsScreen
+import com.mcw.wallet.ui.settings.SettingsViewModel
 import com.mcw.wallet.ui.wallet.WalletScreen
 
 /**
@@ -151,10 +157,32 @@ fun WalletApp(hasWallet: Boolean = false) {
           )
         }
 
-        // Settings screen — real composable, ViewModel wired in integration phase
+        // Settings screen — wired with SettingsViewModel
         composable(NavRoutes.SETTINGS) {
+          val context = LocalContext.current
+          val secureStorage = remember { SecureStorage(context) }
+          val settingsViewModel = remember {
+            SettingsViewModel(
+              secureStorage = secureStorage,
+              debugLogTree = MCWalletApplication.debugLogTree,
+              appContext = context.applicationContext,
+            )
+          }
+          val settingsState by settingsViewModel.uiState.collectAsState()
           SettingsScreen(
-            onNavigateBack = { navController.popBackStack() }
+            state = settingsState,
+            onNavigateBack = { navController.popBackStack() },
+            onRpcUrlChanged = settingsViewModel::onRpcUrlChanged,
+            onSaveRpcUrl = settingsViewModel::saveCustomRpcUrl,
+            onNetworkSelected = settingsViewModel::onNetworkSelected,
+            onConfirmNetworkSwitch = settingsViewModel::confirmNetworkSwitch,
+            onDismissRestartDialog = settingsViewModel::dismissRestartDialog,
+            onShowBackup = settingsViewModel::showBackupMnemonic,
+            onConfirmBackup = settingsViewModel::confirmBackup,
+            onHideBackup = settingsViewModel::hideBackupMnemonic,
+            onDismissError = settingsViewModel::dismissError,
+            onSendDebugReport = settingsViewModel::sendDebugReport,
+            onDismissDebugUrl = settingsViewModel::dismissDebugUrl,
           )
         }
 

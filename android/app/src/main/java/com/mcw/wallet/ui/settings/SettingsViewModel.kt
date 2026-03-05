@@ -1,10 +1,17 @@
 package com.mcw.wallet.ui.settings
 
+import android.content.Context
 import com.mcw.core.network.RpcUrlValidator
 import com.mcw.core.storage.SecureStorage
+import com.mcw.wallet.debug.DebugLogTree
+import com.mcw.wallet.debug.DebugReportSender
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * ViewModel for the Settings screen.
@@ -20,7 +27,10 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class SettingsViewModel(
   private val secureStorage: SecureStorage,
+  private val debugLogTree: DebugLogTree? = null,
+  private val appContext: Context? = null,
 ) {
+  private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
   private val _uiState = MutableStateFlow(
     SettingsUiState(
@@ -155,5 +165,34 @@ class SettingsViewModel(
    */
   fun dismissError() {
     _uiState.value = _uiState.value.copy(errorMessage = null)
+  }
+
+  /**
+   * Send debug report to server and return URL.
+   * Includes performance metrics + last 300 log lines.
+   */
+  fun sendDebugReport() {
+    val ctx = appContext ?: return
+    val tree = debugLogTree ?: return
+    if (_uiState.value.isDebugSending) return
+
+    _uiState.value = _uiState.value.copy(
+      isDebugSending = true,
+      debugReportUrl = null,
+      debugError = null,
+    )
+
+    scope.launch {
+      val result = DebugReportSender.send(tree, ctx)
+      _uiState.value = _uiState.value.copy(
+        isDebugSending = false,
+        debugReportUrl = if (result.success) result.url else null,
+        debugError = if (!result.success) result.error else null,
+      )
+    }
+  }
+
+  fun dismissDebugUrl() {
+    _uiState.value = _uiState.value.copy(debugReportUrl = null, debugError = null)
   }
 }

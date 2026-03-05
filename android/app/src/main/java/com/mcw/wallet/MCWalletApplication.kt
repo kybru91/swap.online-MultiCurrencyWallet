@@ -2,6 +2,7 @@ package com.mcw.wallet
 
 import android.app.Application
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.mcw.wallet.debug.DebugLogTree
 import com.mcw.wallet.logging.SecureCrashlyticsTree
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
@@ -20,6 +21,12 @@ import timber.log.Timber
 @HiltAndroidApp
 class MCWalletApplication : Application() {
 
+  companion object {
+    /** In-memory log tree for debug report export. Null in release builds. */
+    var debugLogTree: DebugLogTree? = null
+      private set
+  }
+
   override fun onCreate() {
     super.onCreate()
     initLogging()
@@ -27,8 +34,10 @@ class MCWalletApplication : Application() {
 
   private fun initLogging() {
     if (BuildConfig.DEBUG) {
-      // Debug: full logcat output including DEBUG level, no Crashlytics
-      Timber.plant(Timber.DebugTree())
+      // Debug: full logcat output + in-memory buffer for debug reports
+      val logTree = DebugLogTree()
+      debugLogTree = logTree
+      Timber.plant(Timber.DebugTree(), logTree)
       // Disable Crashlytics in debug builds to avoid noise
       FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(false)
     } else {

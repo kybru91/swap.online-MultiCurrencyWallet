@@ -28,6 +28,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,10 +45,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
 
 /**
  * Settings screen composable.
@@ -83,8 +87,11 @@ fun SettingsScreen(
   onConfirmBackup: () -> Unit = {},
   onHideBackup: () -> Unit = {},
   onDismissError: () -> Unit = {},
+  onSendDebugReport: () -> Unit = {},
+  onDismissDebugUrl: () -> Unit = {},
 ) {
   val context = LocalContext.current
+  val clipboardManager = LocalClipboardManager.current
 
   // Set FLAG_SECURE when mnemonic is shown to prevent screenshots
   if (state.showMnemonic) {
@@ -327,8 +334,85 @@ fun SettingsScreen(
         }
       }
 
+      Spacer(modifier = Modifier.height(24.dp))
+
+      // --- Developer Tools Section ---
+      SectionHeader("Developer Tools")
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Text(
+            text = "Send device info, performance metrics, and recent logs to developers " +
+              "for troubleshooting.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Spacer(modifier = Modifier.height(12.dp))
+          Button(
+            onClick = onSendDebugReport,
+            enabled = !state.isDebugSending,
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            if (state.isDebugSending) {
+              CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary,
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text("Sending...")
+            } else {
+              Text("Send Debug Report")
+            }
+          }
+          if (state.debugError != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+              text = "Error: ${state.debugError}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.error,
+            )
+          }
+        }
+      }
+
       Spacer(modifier = Modifier.height(32.dp))
     }
+  }
+
+  // --- Debug Report URL Dialog ---
+  if (state.debugReportUrl != null) {
+    AlertDialog(
+      onDismissRequest = onDismissDebugUrl,
+      title = { Text("Debug Report Sent") },
+      text = {
+        Column {
+          Text("Share this URL with the developer:")
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+            text = state.debugReportUrl,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.primary,
+          )
+        }
+      },
+      confirmButton = {
+        Button(onClick = {
+          clipboardManager.setText(AnnotatedString(state.debugReportUrl))
+          onDismissDebugUrl()
+        }) {
+          Text("Copy & Close")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = onDismissDebugUrl) {
+          Text("Close")
+        }
+      },
+    )
   }
 
   // --- Restart Confirmation Dialog ---

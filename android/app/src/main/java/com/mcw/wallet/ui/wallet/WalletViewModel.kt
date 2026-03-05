@@ -6,6 +6,7 @@ import com.mcw.core.btc.BtcManager
 import com.mcw.core.evm.EvmManager
 import com.mcw.core.network.api.CoinGeckoApi
 import com.mcw.core.storage.SecureStorage
+import com.mcw.wallet.debug.trackPerf
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,20 +95,20 @@ class WalletViewModel(
       // All requests in parallel: BTC + ETH + BNB + MATIC + fiat prices
       val fetcher = evmBalanceFetcher
       val btcDeferred = async {
-        runCatching { btcManager.fetchBalance(btcAddress).balance }.getOrNull()
+        runCatching { trackPerf("btc_balance") { btcManager.fetchBalance(btcAddress).balance } }.getOrNull()
       }
       val ethDeferred = async {
-        fetcher?.let { runCatching { it.fetchBalance(ethAddress, "ETH") }.getOrNull() }
+        fetcher?.let { runCatching { trackPerf("eth_balance") { it.fetchBalance(ethAddress, "ETH") } }.getOrNull() }
       }
       val bnbDeferred = async {
-        fetcher?.let { runCatching { it.fetchBalance(ethAddress, "BNB") }.getOrNull() }
+        fetcher?.let { runCatching { trackPerf("bnb_balance") { it.fetchBalance(ethAddress, "BNB") } }.getOrNull() }
       }
       val maticDeferred = async {
-        fetcher?.let { runCatching { it.fetchBalance(ethAddress, "MATIC") }.getOrNull() }
+        fetcher?.let { runCatching { trackPerf("matic_balance") { it.fetchBalance(ethAddress, "MATIC") } }.getOrNull() }
       }
       val pricesDeferred = async {
         runCatching {
-          evmManager.fetchFiatPrices(coinGeckoApi, CURRENCIES.map { it.symbol })
+          trackPerf("fiat_prices") { evmManager.fetchFiatPrices(coinGeckoApi, CURRENCIES.map { it.symbol }) }
         }.getOrNull()
       }
 

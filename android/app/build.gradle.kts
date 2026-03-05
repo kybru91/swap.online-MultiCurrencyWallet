@@ -109,6 +109,9 @@ dependencies {
   // BouncyCastle for EIP-55 address checksum (Keccak-256) in SendViewModel
   implementation("org.bouncycastle:bcprov-jdk18on:1.77")
 
+  // OkHttp for DebugReportSender
+  implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
   // Testing
   testImplementation("junit:junit:4.13.2")
   testImplementation("org.mockito:mockito-core:5.8.0")

@@ -1,0 +1,17 @@
+{
+  "extends": "@react-native/typescript-config/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@crypto/*": ["src/crypto/*"],
+      "@storage/*": ["src/storage/*"],
+      "@auth/*": ["src/auth/*"],
+      "@network/*": ["src/network/*"],
+      "@state/*": ["src/state/*"],
+      "@navigation/*": ["src/navigation/*"],
+      "@screens/*": ["src/screens/*"],
+      "@components/*": ["src/components/*"]
+    }
+  },
+  "include": ["src", "index.js", "App.tsx", "__tests__", "e2e"]
+}

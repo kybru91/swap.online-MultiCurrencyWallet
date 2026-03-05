@@ -16,6 +16,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Verify SKILL.md exists
+        run: |
+          if [ ! -f SKILL.md ]; then
+            echo ""
+            echo "❌  SKILL.md not found!"
+            echo ""
+            echo "    Every crypto product must have SKILL.md — a guide for AI agents."
+            echo "    Create SKILL.md with these sections:"
+            echo ""
+            echo "      ## What is this project   — description, live URL, repo link"
+            echo "      ## Stack                  — tech stack (frontend, contracts, hosting)"
+            echo "      ## Repository structure   — key files/dirs and their purpose"
+            echo "      ## Build & Deploy         — build commands, CI pipeline, server paths"
+            echo "      ## Common tasks           — how to add networks, update contracts, fund farms"
+            echo "      ## Troubleshooting        — known errors and fixes"
+            echo ""
+            echo "    Example: https://github.com/noxonsu/farmfactory/blob/main/SKILL.md"
+            echo ""
+            exit 1
+          fi
+          echo "✓ SKILL.md found"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -261,6 +283,15 @@ jobs:
             echo "wallet.wpmix.net plugin updated to ${{ env.VERSION }}:"
             grep "MCWALLET_VER\|Version:" "$PLUGIN_DIR/multi-currency-wallet-pro.php" | head -3
 
+      - name: Deploy to appsource/wallet
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          personal_token: ${{ secrets.APPSOURCE_TOKEN }}
+          external_repository: appsource/wallet
+          publish_branch: gh-pages
+          publish_dir: ./build-mainnet-widget
+          force_orphan: true
+
       - name: Health check
         run: |
           sleep 10
@@ -287,6 +318,14 @@ jobs:
             echo "✓ farm.wpmix.net mcw-info.json OK (HTTP $FM_CODE)"
           else
             echo "⚠ farm.wpmix.net mcw-info.json HTTP $FM_CODE"
+          fi
+
+          # Check appsource/wallet GitHub Pages
+          GH_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://appsource.github.io/wallet/ || echo "000")
+          if [ "$GH_CODE" = "200" ]; then
+            echo "✓ appsource.github.io/wallet OK (HTTP $GH_CODE)"
+          else
+            echo "⚠ appsource.github.io/wallet HTTP $GH_CODE (non-blocking)"
           fi
 
       - name: Notify completion

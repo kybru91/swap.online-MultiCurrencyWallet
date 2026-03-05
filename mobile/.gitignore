@@ -1,0 +1,44 @@
+# React Native
+node_modules/
+.bundle/
+
+# Metro bundler
+.metro-health-check*
+
+# Android
+android/app/build/
+android/.gradle/
+android/local.properties
+android/app/.cxx/
+android/captures/
+
+# iOS (on hold — add when iOS support is added)
+ios/Pods/
+ios/build/
+*.xcworkspace/
+DerivedData/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# Jest
+coverage/
+
+# Detox
+artifacts/
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/

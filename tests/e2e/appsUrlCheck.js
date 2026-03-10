@@ -11,12 +11,12 @@ const http = require('http')
 
 // Синхронизировать с appsCatalog.ts при добавлении новых апп
 const APPS = [
-  { id: 'onout-dex',       url: 'https://appsource.github.io/dex/' },
-  { id: 'polyfactory',     url: 'https://polyfactory.wpmix.net/' },
-  { id: 'farm-factory',    url: 'https://appsource.github.io/farm/' },
-  { id: 'ido-launchpad',   url: 'https://launchpad.onout.org/' },
-  { id: 'crypto-lottery',  url: 'https://lottery.onout.org/' },
-  { id: 'lenda',           url: 'https://lenda.wpmix.net/' },
+  { id: 'onout-dex', url: 'https://appsource.github.io/dex/' },
+  { id: 'polyfactory', url: 'https://polyfactory.wpmix.net/' },
+  { id: 'farm-factory', url: 'https://appsource.github.io/farm/' },
+  { id: 'ido-launchpad', url: 'https://launchpad.onout.org/' },
+  { id: 'crypto-lottery', url: 'https://lottery.onout.org/' },
+  { id: 'lenda', url: 'https://lenda.wpmix.net/' },
 ]
 
 const TIMEOUT_MS = 8000

@@ -1,8 +1,4 @@
-import {
-  defaultWalletAppId,
-  getWalletAppById,
-  isAllowedWalletAppUrl,
-} from 'pages/Apps/appsCatalog'
+import { defaultWalletAppId, getWalletAppById, isAllowedWalletAppUrl } from 'pages/Apps/appsCatalog'
 
 describe('Wallet Apps Catalog', () => {
   it('uses onout-dex as default app for first approximation', () => {

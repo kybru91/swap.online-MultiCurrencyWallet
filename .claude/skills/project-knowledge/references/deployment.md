@@ -7,7 +7,7 @@ Deployment process, infrastructure, and production operations for AI agents.
 
 ## Deployment Platform
 
-**Web App:** GitHub Pages (swaponline.github.io)
+**Web App:** GitHub Pages (`appsource/wallet` repo → `appsource.github.io/wallet/`)
 - **Type:** Static hosting (client-side SPA)
 - **Why:** Free, reliable, CDN-backed, no server maintenance, perfect for client-side crypto wallet
 
@@ -35,9 +35,8 @@ Deployment process, infrastructure, and production operations for AI agents.
 - `DEBUG` - Enables debug logs (e.g., `app:*,swap.core:*`)
 
 **GitHub Actions secrets:**
-- `buildbot` - SSH deploy key for pushing to `swaponline.github.io` repo
-  - Used in: `scripts/deploy` (called by deploymaster.yml)
-  - To rotate: Generate new SSH key, add to swaponline.github.io deploy keys, update Actions secret
+- `APPSOURCE_TOKEN` - personal token for pushing to `appsource/wallet` repo (deploy.yml)
+  - Used in: `deploy.yml` step "Deploy to appsource/wallet"
 
 **Client-side config:** RPC endpoints, contract addresses checked into repo at `src/front/config/*.js` (not env vars, part of built bundle)
 
@@ -49,7 +48,7 @@ Deployment process, infrastructure, and production operations for AI agents.
 
 ## Deployment Triggers
 
-**Production:** Auto-deploy on push to `master` → GitHub Actions runs `scripts/deploy` → builds mainnet bundle → pushes to `swaponline.github.io` repo
+**Production:** Auto-deploy on push to `master` → GitHub Actions `deploy.yml` → builds mainnet bundle → pushes to `appsource/wallet` repo → live at `appsource.github.io/wallet/`
 
 **Staging:** Not configured (testnet builds are manual: `npm run build:testnet`)
 
@@ -62,17 +61,18 @@ Deployment process, infrastructure, and production operations for AI agents.
 Fully automated via CI. Push to `master` → build → deploy → live.
 
 **Manual verification after deploy:**
-- [ ] Check https://swaponline.github.io loads
+- [ ] Check https://appsource.github.io/wallet/ loads
 - [ ] Verify wallet creation works (testnet mode recommended first)
 - [ ] Check P2P order book connects (libp2p peers visible)
-- [ ] Check https://swaponline.github.io/#/apps — all 6 app tiles visible with card images
+- [ ] Check https://appsource.github.io/wallet/#/apps — all 7 app tiles visible with card images
 - [ ] Open Onout DEX tile — iframe loads dex.onout.org with theme param
+- [ ] Run CDP smoke: `node tests/e2e/appsCheck.js` (requires chrome-cdp:9222 + dev server:9001)
 
 ## GitHub Actions Workflows
 
 | Workflow | File | Trigger | What It Does |
 |----------|------|---------|--------------|
-| **Deploy MCW** | `deploymaster.yml` | push to `master` | Builds mainnet bundle → pushes to swaponline.github.io. Includes Puppeteer health check verifying `/#/wallet` loads without JS errors. |
+| **Deploy MCW** | `deploy.yml` | push to `master` | Builds mainnet bundle → pushes to `appsource/wallet` GitHub Pages. Also builds WordPress plugin ZIP. Includes health check for `appsource.github.io/wallet/`. |
 | **Deploy WordPress Plugin** | `deploy.yml` | push to `master`/`main` | Builds mainnet+testnet widgets → packages as ZIP → uploads to farm.wpmix.net/updates/ → updates mcw-info.json |
 | **Apps Smoke** | `appsSmoke.yml` | changes in `Apps/**`, `Header/Nav/**`, `appsSmoke.test.js` | Builds testnet → runs 9 E2E smoke tests via Puppeteer (catalog tiles, iframe navigation, theme forwarding, external URL reachability) |
 
@@ -82,7 +82,17 @@ File: `tests/e2e/appsSmoke.test.js`
 
 The `APPS` array in this file is a **manual copy** of `appsCatalog.ts`. When adding a new app to the catalog, MUST update both files.
 
-Currently tracked apps: `onout-dex`, `polyfactory`, `farm-factory`, `ido-launchpad`, `crypto-lottery`
+Currently tracked apps: `onout-dex`, `polyfactory`, `farm-factory`, `ido-launchpad`, `crypto-lottery`, `lenda`
+
+**Static file hosting — appsource.github.io repos:**
+- onout-dex → static at `appsource.github.io/dex/` (CNAME: `dex.onout.org`)
+- ido-launchpad → static at `appsource.github.io/launchpad/` (CNAME: `launchpad.onout.org`)
+- crypto-lottery → static at `appsource.github.io/lottery/` (CNAME: `lottery.onout.org`)
+- farm-factory → static at `appsource.github.io/farm/` (no CNAME, direct URL)
+
+**IMPORTANT — iframe redirect rule:** GitHub Pages with CNAME redirects `appsource.github.io/{repo}/` → 301 → custom domain.
+Browsers do NOT follow cross-origin 301 inside iframes → blank content.
+`appsCatalog.ts` MUST use the custom domain URLs (dex.onout.org, etc.), NOT appsource URLs.
 
 ### walletBridge Integration in External Apps
 
@@ -91,7 +101,7 @@ When adding a new external app to the catalog:
 2. Add `walletBridge: 'eip1193'` to the catalog entry
 3. The external app MUST have bridge client support:
    - Check if `wallet-bridge-init.js` is present in the app's HTML `<head>`
-   - Bridge client URL: `https://swaponline.github.io/wallet-apps-bridge-client.js`
+   - Bridge client URL: `https://appsource.github.io/wallet/wallet-apps-bridge-client.js`
    - Detection: `?walletBridge=swaponline` URL param + iframe check
 4. Add card screenshot PNG to `src/front/shared/pages/Apps/images/{app-id}.png`
 5. Update `APPS` array in `tests/e2e/appsSmoke.test.js`
@@ -102,7 +112,7 @@ When adding a new external app to the catalog:
 
 **Platform rollback:** Revert commit on `master` branch → push → CI auto-deploys previous version
 
-**Alternative:** Manually checkout previous commit in `swaponline.github.io` repo and force push
+**Alternative:** Manually checkout previous commit in `appsource/wallet` repo and force push
 
 **Approximate time:** ~5 minutes (CI build + deploy)
 
@@ -110,7 +120,7 @@ When adding a new external app to the catalog:
 
 ## Environments
 
-**Web App - Production:** https://swaponline.github.io - Deploys from `master` branch (mainnet config)
+**Web App - Production:** https://appsource.github.io/wallet/ - Deploys from `master` branch (mainnet config)
 
 **Web App - Local testnet:** `npm run dev` - localhost:9001 (testnet RPC endpoints)
 

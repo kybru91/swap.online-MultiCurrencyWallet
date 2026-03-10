@@ -71,7 +71,8 @@ Rule of thumb: Never push directly to `master` — always PR.
 
 ### Security & Quality Gates
 
-- **Pre-commit:** No automated secret scanning configured.
+- **Pre-commit:** `.git/hooks/pre-commit` — checks all 6 external app URLs return HTTP 2xx.
+- **Pre-push:** `.git/hooks/pre-push` — TypeScript (`tsc --noEmit`), ESLint, Prettier on changed files.
 - **PR checks:** GitHub Actions build + unit tests must pass before merge.
 - **Code review:** Human review required for all PRs.
 

@@ -92,7 +92,8 @@ Currently tracked apps: `onout-dex`, `polyfactory`, `farm-factory`, `ido-launchp
 
 **IMPORTANT — iframe redirect rule:** GitHub Pages with CNAME redirects `appsource.github.io/{repo}/` → 301 → custom domain.
 Browsers do NOT follow cross-origin 301 inside iframes → blank content.
-`appsCatalog.ts` MUST use the custom domain URLs (dex.onout.org, etc.), NOT appsource URLs.
+Use whichever URL returns HTTP 200 directly (no redirect). Check with `node tests/e2e/appsUrlCheck.js`.
+**Current (2026-03-10):** `dex.onout.org` returns 404 — use `appsource.github.io/dex/` directly.
 
 ### walletBridge Integration in External Apps
 

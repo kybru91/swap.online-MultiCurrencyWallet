@@ -29,17 +29,6 @@ const EXTERNAL_ALLOWED_HOSTS = new Set([
 
 export const walletAppsCatalog: WalletApp[] = [
   {
-    id: 'swapio-exchange',
-    title: 'Swap.Online Exchange',
-    menuTitle: 'Exchange App',
-    description: 'Current Swap.Online exchange opened in in-wallet Apps container.',
-    iconSymbol: 'SO',
-    routeUrl: '/exchange/quick',
-    supportedChains: ['Bitcoin', 'Ethereum', 'BSC', 'Polygon'],
-    walletBridge: 'none',
-    isInternal: true,
-  },
-  {
     id: 'onout-dex',
     title: 'Onout DEX',
     menuTitle: 'Onout DEX',

@@ -10,21 +10,10 @@ describe('Wallet Apps Catalog', () => {
     expect(defaultWalletAppId).toBe('onout-dex')
   })
 
-  it('resolves internal app route into host hash url', () => {
-    const exchangeApp = getWalletAppById('swapio-exchange')
-
-    expect(exchangeApp).toBeDefined()
-
-    const resolvedUrl = resolveWalletAppUrl(exchangeApp!)
-
-    expect(resolvedUrl).toBe(`${window.location.origin}${window.location.pathname}#/exchange/quick`)
-    expect(isAllowedWalletAppUrl(resolvedUrl)).toBe(true)
-  })
-
   it('allows only configured external hosts in allowlist', () => {
-    expect(isAllowedWalletAppUrl('https://dex.onout.org/')).toBe(true)
+    expect(isAllowedWalletAppUrl('https://appsource.github.io/dex/')).toBe(true)
     expect(isAllowedWalletAppUrl('https://polyfactory.wpmix.net/')).toBe(true)
-    expect(isAllowedWalletAppUrl('https://farm.wpmix.net/')).toBe(true)
+    expect(isAllowedWalletAppUrl('https://appsource.github.io/farm/')).toBe(true)
     expect(isAllowedWalletAppUrl('https://launchpad.onout.org/')).toBe(true)
     expect(isAllowedWalletAppUrl('https://lottery.onout.org/')).toBe(true)
     expect(isAllowedWalletAppUrl('https://evil.example.com/')).toBe(false)
@@ -42,7 +31,7 @@ describe('Wallet Apps Catalog', () => {
     const app = getWalletAppById('farm-factory')
     expect(app).toBeDefined()
     expect(app!.walletBridge).toBe('eip1193')
-    expect(app!.routeUrl).toContain('farm.wpmix.net')
+    expect(app!.routeUrl).toContain('appsource.github.io/farm')
     expect(app!.routeUrl).toContain('walletBridge=swaponline')
   })
 

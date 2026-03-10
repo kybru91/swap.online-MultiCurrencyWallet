@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>MCW Bridge Test Host</title>
+  </head>
+  <body>
+    <!-- Test host page: runs MCW wallet bridge with mock wallet, embeds PolyFactory iframe -->
+    <iframe
+      id="app-frame"
+      title="PolyFactory"
+      style="width: 100%; height: 300px; border: 1px solid #ccc"
+    ></iframe>
+    <div id="status">Initializing...</div>
+    <script>
+      // ─── Inline Wallet Apps Bridge (mirrors walletBridge.ts logic) ─────────────
+      // This avoids dependency on the live swaponline.github.io deployment,
+      // ensuring tests always run against the current codebase version.
+
+      var MOCK_ADDRESS = '0x1000000000000000000000000000000000000001'
+      var APP_URL = 'https://appsource.github.io/predict/?walletBridge=swaponline'
+
+      var BRIDGE_SOURCE_HOST = 'swap.wallet.apps.bridge.host'
+      var BRIDGE_SOURCE_CLIENT = 'swap.wallet.apps.bridge.client'
+      var BRIDGE_HELLO = 'WALLET_APPS_BRIDGE_HELLO'
+      var BRIDGE_REQUEST = 'WALLET_APPS_BRIDGE_REQUEST'
+      var BRIDGE_RESPONSE = 'WALLET_APPS_BRIDGE_RESPONSE'
+      var BRIDGE_READY = 'WALLET_APPS_BRIDGE_READY'
+      var BRIDGE_EVENT = 'WALLET_APPS_BRIDGE_EVENT'
+
+      var ALLOWED_PREFIXES = ['eth_', 'wallet_', 'personal_']
+      var ALLOWED_EXACT = ['net_version', 'web3_clientVersion']
+      var BLOCKED = ['eth_subscribe', 'eth_unsubscribe']
+
+      function isAllowedMethod(method) {
+        if (!method || BLOCKED.indexOf(method) !== -1) return false
+        if (ALLOWED_EXACT.indexOf(method) !== -1) return true
+        for (var i = 0; i < ALLOWED_PREFIXES.length; i++) {
+          if (method.indexOf(ALLOWED_PREFIXES[i]) === 0) return true
+        }
+        return false
+      }
+
+      var KNOWN_CHAINS = {
+        '0x1': { networkVersion: '1' },
+        '0x38': { networkVersion: '56' },
+        '0x89': { networkVersion: '137' },
+        '0xa4b1': { networkVersion: '42161' },
+        '0x64': { networkVersion: '100' },
+        '0xa86a': { networkVersion: '43114' },
+      }
+
+      var internalChainId = '0x38'
+      var internalNetworkVersion = '56'
+      var clientConnected = false
+
+      var iframe = document.getElementById('app-frame')
+      var targetOrigin
+
+      try {
+        targetOrigin = new URL(APP_URL).origin
+      } catch (e) {
+        targetOrigin = ''
+      }
+
+      function sendToIframe(payload) {
+        if (iframe.contentWindow && targetOrigin) {
+          iframe.contentWindow.postMessage(payload, targetOrigin)
+        }
+      }
+
+      function sendProviderEvent(eventName, data) {
+        sendToIframe({
+          source: BRIDGE_SOURCE_HOST,
+          type: BRIDGE_EVENT,
+          payload: { eventName: eventName, data: data },
+        })
+      }
+
+      function sendReady() {
+        sendToIframe({
+          source: BRIDGE_SOURCE_HOST,
+          type: BRIDGE_READY,
+          payload: {
+            providerAvailable: true,
+            chainId: internalChainId,
+            accounts: [MOCK_ADDRESS],
+            methods: ALLOWED_EXACT.slice(),
+            methodPrefixes: ALLOWED_PREFIXES.slice(),
+          },
+        })
+      }
+
+      function normalizeChainId(chainId) {
+        if (chainId === null || chainId === undefined) return null
+        if (typeof chainId === 'number') return '0x' + chainId.toString(16)
+        return String(chainId)
+      }
+
+      function handleRequest(requestId, method, params) {
+        var respond = function (result, error) {
+          var payload = error
+            ? { requestId: requestId, error: error }
+            : { requestId: requestId, result: result }
+          sendToIframe({ source: BRIDGE_SOURCE_HOST, type: BRIDGE_RESPONSE, payload: payload })
+        }
+
+        if (!isAllowedMethod(method)) {
+          respond(null, {
+            code: 4200,
+            message: 'Method ' + method + ' is not allowed by Wallet Apps bridge policy',
+          })
+          return
+        }
+
+        try {
+          if (method === 'eth_accounts' || method === 'eth_requestAccounts') {
+            respond([MOCK_ADDRESS])
+          } else if (method === 'eth_chainId') {
+            respond(internalChainId)
+          } else if (method === 'net_version') {
+            respond(internalNetworkVersion)
+          } else if (method === 'wallet_switchEthereumChain') {
+            var requestedChainId = params && params[0] ? params[0].chainId : null
+            if (!requestedChainId) {
+              respond(null, { code: 4001, message: 'Missing chainId parameter' })
+              return
+            }
+            var normalized = normalizeChainId(requestedChainId)
+            internalChainId = normalized || internalChainId
+            var chainInfo = KNOWN_CHAINS[internalChainId.toLowerCase()]
+            internalNetworkVersion = chainInfo
+              ? chainInfo.networkVersion
+              : String(parseInt(internalChainId, 16))
+            sendProviderEvent('chainChanged', internalChainId)
+            respond(null)
+          } else if (method === 'wallet_addEthereumChain') {
+            respond(null)
+          } else {
+            respond(null, {
+              code: 4200,
+              message: 'Method ' + method + ' not supported by internal wallet provider',
+            })
+          }
+        } catch (err) {
+          respond(null, {
+            code: (err && err.code) || 4001,
+            message: (err && err.message) || 'Request failed',
+          })
+        }
+      }
+
+      window.addEventListener('message', function (event) {
+        if (!targetOrigin || event.origin !== targetOrigin) return
+        if (event.source !== iframe.contentWindow) return
+
+        var data = event.data || {}
+        if (data.source !== BRIDGE_SOURCE_CLIENT) return
+
+        if (data.type === BRIDGE_HELLO) {
+          clientConnected = true
+          document.getElementById('status').textContent = 'Bridge connected. Client sent HELLO.'
+          sendReady()
+          return
+        }
+
+        if (data.type === BRIDGE_REQUEST) {
+          var payload = data.payload || {}
+          var requestId = payload.requestId
+          var method = payload.method
+          var params = payload.params || []
+          if (!requestId || !method) return
+          handleRequest(requestId, method, params)
+        }
+      })
+
+      // Also send READY on iframe load (some DApps don't send HELLO)
+      iframe.addEventListener('load', function () {
+        document.getElementById('status').textContent = 'Iframe loaded. Sending READY...'
+        sendReady()
+      })
+
+      // Initialize iframe src
+      iframe.src = APP_URL
+      document.getElementById('status').textContent = 'Loading PolyFactory iframe...'
+    </script>
+  </body>
+</html>

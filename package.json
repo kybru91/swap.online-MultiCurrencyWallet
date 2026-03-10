@@ -38,6 +38,8 @@
     "test:e2e_withdraw": "jest tests/e2e/withdraw.test.ts --detectOpenHandles",
     "test:e2e_history": "jest tests/e2e/history.test.ts --detectOpenHandles",
     "test:e2e_apps_smoke": "ACTIONS=true jest tests/e2e/appsSmoke.test.js --detectOpenHandles --testEnvironment=node",
+    "test:e2e_dapps_open": "node tests/e2e/dappsOpen.e2e.js",
+    "test:e2e_wallet_bridge": "node tests/e2e/walletBridge.e2e.js",
     "test:e2e:actions": "ACTIONS=true jest --findRelatedTests tests/e2e/*.test.ts tests/e2e/wallet/*.test.ts --detectOpenHandles",
     "eslint": "eslint --fix --cache ./shared --ext js",
     "prettier": "prettier --ignore-path .gitignore \"**/*.+(js|json|ts|tsx)\" --write",

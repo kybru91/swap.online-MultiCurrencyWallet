@@ -1,10 +1,7 @@
 import { metamask } from 'helpers'
 
 type Eip1193Provider = {
-  request: (payload: {
-    method: string
-    params?: any
-  }) => Promise<any>
+  request: (payload: { method: string; params?: any }) => Promise<any>
   on?: (eventName: string, cb: (...args: any[]) => void) => void
   removeListener?: (eventName: string, cb: (...args: any[]) => void) => void
 }
@@ -43,14 +40,8 @@ const BRIDGE_READY = 'WALLET_APPS_BRIDGE_READY'
 const BRIDGE_EVENT = 'WALLET_APPS_BRIDGE_EVENT'
 
 const ALLOWED_EIP1193_METHOD_PREFIXES = ['eth_', 'wallet_', 'personal_']
-const ALLOWED_EIP1193_EXACT_METHODS = new Set([
-  'net_version',
-  'web3_clientVersion',
-])
-const BLOCKED_EIP1193_METHODS = new Set([
-  'eth_subscribe',
-  'eth_unsubscribe',
-])
+const ALLOWED_EIP1193_EXACT_METHODS = new Set(['net_version', 'web3_clientVersion'])
+const BLOCKED_EIP1193_METHODS = new Set(['eth_subscribe', 'eth_unsubscribe'])
 
 const isAllowedEip1193Method = (method: string): boolean => {
   if (!method || BLOCKED_EIP1193_METHODS.has(method)) {
@@ -76,11 +67,8 @@ const normalizeChainId = (chainId: any): string | null => {
   return `${chainId}`
 }
 
-const buildRequestFromLegacySend = (
-  providerLike: any,
-  sender: (...args: any[]) => any
-) => {
-  return ({ method, params }: { method: string, params?: any }): Promise<any> => {
+const buildRequestFromLegacySend = (providerLike: any, sender: (...args: any[]) => any) => {
+  return ({ method, params }: { method: string; params?: any }): Promise<any> => {
     const payload: JsonRpcRequestPayload = {
       id: Date.now(),
       jsonrpc: '2.0',
@@ -107,7 +95,11 @@ const buildRequestFromLegacySend = (
           return
         }
 
-        if (typeof response === 'object' && response !== null && Object.prototype.hasOwnProperty.call(response, 'result')) {
+        if (
+          typeof response === 'object' &&
+          response !== null &&
+          Object.prototype.hasOwnProperty.call(response, 'result')
+        ) {
           resolve(response.result)
           return
         }
@@ -185,6 +177,21 @@ export const createWalletAppsBridge = ({
     targetOrigin = ''
   }
 
+  // Default chain for internal wallet (BSC = 0x38 / 56)
+  // Most DApps in the catalog target BSC; this can be overridden by wallet_switchEthereumChain
+  let internalChainId = '0x38'
+  let internalNetworkVersion = '56'
+
+  // Known chains the internal wallet can serve (from evmNetworks config)
+  const KNOWN_CHAINS: Record<string, { networkVersion: string }> = {
+    '0x1': { networkVersion: '1' }, // Ethereum
+    '0x38': { networkVersion: '56' }, // BSC
+    '0x89': { networkVersion: '137' }, // Polygon
+    '0xa4b1': { networkVersion: '42161' }, // Arbitrum
+    '0x64': { networkVersion: '100' }, // Gnosis
+    '0xa86a': { networkVersion: '43114' }, // Avalanche
+  }
+
   // Create virtual EIP-1193 provider for MCW wallet
   // Priority: external wallet (MetaMask) address if connected, otherwise internal MCW address
   const createInternalProvider = (): Eip1193Provider | null => {
@@ -208,7 +215,56 @@ export const createWalletAppsBridge = ({
         if (method === 'eth_requestAccounts') {
           return [getActiveAddress()]
         }
-        // Forward all other methods (eth_call, eth_chainId, eth_getBalance, etc.)
+        if (method === 'eth_chainId') {
+          // Try external provider first, fallback to internal chain state
+          const externalProvider = getEip1193Provider()
+          if (externalProvider) {
+            try {
+              return await externalProvider.request({ method, params })
+            } catch (_) {}
+          }
+          return internalChainId
+        }
+        if (method === 'net_version') {
+          const externalProvider = getEip1193Provider()
+          if (externalProvider) {
+            try {
+              return await externalProvider.request({ method, params })
+            } catch (_) {}
+          }
+          return internalNetworkVersion
+        }
+        if (method === 'wallet_switchEthereumChain') {
+          const requestedChainId = params?.[0]?.chainId
+          if (!requestedChainId) {
+            throw { code: 4001, message: 'Missing chainId parameter' }
+          }
+          const normalizedId = normalizeChainId(requestedChainId)
+          // Try external provider first
+          const externalProvider = getEip1193Provider()
+          if (externalProvider) {
+            try {
+              return await externalProvider.request({ method, params })
+            } catch (_) {}
+          }
+          // Internal handling: accept known chains
+          if (normalizedId && KNOWN_CHAINS[normalizedId.toLowerCase()]) {
+            internalChainId = normalizedId
+            internalNetworkVersion = KNOWN_CHAINS[normalizedId.toLowerCase()].networkVersion
+            // Notify iframe about chain change
+            sendProviderEvent('chainChanged', internalChainId)
+            return null
+          }
+          // Accept any chain (DApps may use custom chains)
+          internalChainId = normalizedId || internalChainId
+          sendProviderEvent('chainChanged', internalChainId)
+          return null
+        }
+        if (method === 'wallet_addEthereumChain') {
+          // Accept silently — MCW supports multiple chains
+          return null
+        }
+        // Forward all other methods (eth_call, eth_getBalance, eth_sendTransaction, etc.)
         // to the external EIP-1193 provider (e.g. MetaMask/window.ethereum)
         const externalProvider = getEip1193Provider()
         if (externalProvider) {

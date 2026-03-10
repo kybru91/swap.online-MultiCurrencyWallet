@@ -218,7 +218,9 @@ async function checkAppsMain(session) {
   // Simple direct evaluate calls (avoid evaluateJSON which can fail on first load)
   const bg = await session.evaluate(`window.getComputedStyle(document.body).backgroundColor`)
   const imgsCount = await session.evaluate(`document.querySelectorAll('img[src]').length`)
-  const h1Text = await session.evaluate(`document.querySelector('h1') ? document.querySelector('h1').textContent.trim() : ''`)
+  const h1Text = await session.evaluate(
+    `document.querySelector('h1') ? document.querySelector('h1').textContent.trim() : ''`
+  )
   const url = await session.evaluate(`location.href`)
 
   const shot = await session.screenshot('/tmp/mcw-apps-main.png')

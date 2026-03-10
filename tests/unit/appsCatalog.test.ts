@@ -2,7 +2,6 @@ import {
   defaultWalletAppId,
   getWalletAppById,
   isAllowedWalletAppUrl,
-  resolveWalletAppUrl,
 } from 'pages/Apps/appsCatalog'
 
 describe('Wallet Apps Catalog', () => {

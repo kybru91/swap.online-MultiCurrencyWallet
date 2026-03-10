@@ -41,8 +41,8 @@ const APPS = [
   {
     id: 'farm-factory',
     title: 'FarmFactory',
-    urlPattern: 'farm.wpmix.net',
-    externalUrl: 'https://farm.wpmix.net/',
+    urlPattern: 'appsource.github.io/farm',
+    externalUrl: 'https://appsource.github.io/farm/',
   },
   {
     id: 'ido-launchpad',

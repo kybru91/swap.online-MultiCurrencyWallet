@@ -56,6 +56,12 @@ const APPS = [
     urlPattern: 'lottery.onout.org',
     externalUrl: 'https://lottery.onout.org/',
   },
+  {
+    id: 'lenda',
+    title: 'Lenda',
+    urlPattern: 'lenda.wpmix.net',
+    externalUrl: 'https://lenda.wpmix.net/',
+  },
 ]
 
 jest.setTimeout(300_000) // 5 minutes per test
@@ -109,7 +115,9 @@ async function newPage() {
 // ------------------------------------------------------------------
 
 async function goToAppsPage(page) {
-  await page.evaluate(() => { window.SO_WalletAppsEnabled = true })
+  await page.evaluate(() => {
+    window.SO_WalletAppsEnabled = true
+  })
   const url = page.url().split('#')[0]
   await page.goto(`${url}#/apps`, { waitUntil: 'domcontentloaded' })
   await timeOut(1_500)
@@ -148,7 +156,10 @@ describe('Apps Catalog — tile render', () => {
         let found = false
         for (const tile of tiles) {
           const text = await page.evaluate((el) => el.textContent, tile)
-          if (text && text.includes(app.title)) { found = true; break }
+          if (text && text.includes(app.title)) {
+            found = true
+            break
+          }
         }
 
         if (!found) {
@@ -359,12 +370,13 @@ describe('App view — layout and UI', () => {
       console.log('Back button absent ✓ (full-screen mode)')
 
       // No duplicate app-title tab buttons either
-      const appTabButtons = await page.evaluate((appTitles) => {
-        const btns = Array.from(document.querySelectorAll('button'))
-        return appTitles.filter((title) =>
-          btns.some((b) => b.textContent?.trim() === title)
-        )
-      }, APPS.map((a) => a.title))
+      const appTabButtons = await page.evaluate(
+        (appTitles) => {
+          const btns = Array.from(document.querySelectorAll('button'))
+          return appTitles.filter((title) => btns.some((b) => b.textContent?.trim() === title))
+        },
+        APPS.map((a) => a.title)
+      )
 
       console.log('App tab buttons found:', appTabButtons)
       expect(appTabButtons.length).toBe(0)
@@ -389,15 +401,19 @@ describe('App view — layout and UI', () => {
       // waits 1.5s — CSS and React are fully ready at that point.
       // Then we do an in-page hash change (no full reload) so the flag stays.
       await goToAppsPage(page)
-      await page.evaluate((appId) => { window.location.hash = `/apps/${appId}` }, targetApp.id)
+      await page.evaluate((appId) => {
+        window.location.hash = `/apps/${appId}`
+      }, targetApp.id)
       // Wait for React Router re-render + layout (iframe must have non-zero width)
-      await page.waitForFunction(
-        () => {
-          const iframe = document.querySelector('iframe')
-          return iframe && iframe.getBoundingClientRect().width > 10
-        },
-        { timeout: 10_000 },
-      ).catch(() => {})
+      await page
+        .waitForFunction(
+          () => {
+            const iframe = document.querySelector('iframe')
+            return iframe && iframe.getBoundingClientRect().width > 10
+          },
+          { timeout: 10_000 }
+        )
+        .catch(() => {})
 
       // The iframe should be close to full viewport width
       const diagInfo = await page.evaluate(() => {
@@ -418,7 +434,9 @@ describe('App view — layout and UI', () => {
           parentClass: iframeParent ? iframeParent.className.slice(0, 60) : null,
           mainWidth: main ? Math.round(main.getBoundingClientRect().width) : 0,
           hasSecurityNotice: !!document.querySelector('[class*="securityNotice"]'),
-          hasBackButton: !!Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('All apps')),
+          hasBackButton: !!Array.from(document.querySelectorAll('button')).find((b) =>
+            b.textContent?.includes('All apps')
+          ),
           url: window.location.href,
         }
       })

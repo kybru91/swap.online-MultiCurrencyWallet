@@ -3,6 +3,7 @@ import imgPolyfactory from './images/polyfactory.png'
 import imgFarmFactory from './images/farm-factory.png'
 import imgLaunchpad from './images/ido-launchpad.png'
 import imgLottery from './images/crypto-lottery.png'
+import imgLenda from './images/lenda.png'
 
 export type WalletApp = {
   id: string
@@ -24,6 +25,7 @@ const EXTERNAL_ALLOWED_HOSTS = new Set([
   'farm.wpmix.net',
   'launchpad.onout.org',
   'lottery.onout.org',
+  'lenda.wpmix.net',
 ])
 
 export const walletAppsCatalog: WalletApp[] = [
@@ -92,6 +94,18 @@ export const walletAppsCatalog: WalletApp[] = [
     cardImage: imgLottery,
     routeUrl: 'https://appsource.github.io/lottery/?walletBridge=swaponline',
     supportedChains: ['Ethereum', 'BSC'],
+    walletBridge: 'eip1193',
+  },
+  {
+    id: 'lenda',
+    title: 'Lenda',
+    menuTitle: 'Lenda',
+    description:
+      'Aave-like lending and borrowing on BSC. Deposit USDT to earn APY, borrow against BNB collateral.',
+    iconSymbol: 'LD',
+    cardImage: imgLenda,
+    routeUrl: 'https://lenda.wpmix.net/?walletBridge=swaponline',
+    supportedChains: ['BSC'],
     walletBridge: 'eip1193',
   },
 ]

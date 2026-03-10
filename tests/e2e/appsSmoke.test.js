@@ -29,8 +29,8 @@ const APPS = [
   {
     id: 'onout-dex',
     title: 'Onout DEX',
-    urlPattern: 'dex.onout.org',
-    externalUrl: 'https://dex.onout.org/',
+    urlPattern: 'appsource.github.io/dex',
+    externalUrl: 'https://appsource.github.io/dex/',
   },
   {
     id: 'polyfactory',

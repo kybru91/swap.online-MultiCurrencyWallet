@@ -20,7 +20,6 @@ export type WalletApp = {
 
 const EXTERNAL_ALLOWED_HOSTS = new Set([
   'appsource.github.io',
-  'dex.onout.org',
   'polyfactory.wpmix.net',
   'farm.wpmix.net',
   'launchpad.onout.org',
@@ -47,7 +46,7 @@ export const walletAppsCatalog: WalletApp[] = [
     description: 'Onout DEX opened inside wallet container for seamless swap flow.',
     iconSymbol: 'OD',
     cardImage: imgDex,
-    routeUrl: 'https://dex.onout.org/?walletBridge=swaponline',
+    routeUrl: 'https://appsource.github.io/dex/?walletBridge=swaponline',
     supportedChains: ['Ethereum', 'BSC', 'Polygon'],
     walletBridge: 'eip1193',
   },

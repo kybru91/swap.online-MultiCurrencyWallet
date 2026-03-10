@@ -210,36 +210,26 @@ async function checkAppsMain(session) {
   await session.navigate(BASE_URL + '/#/apps')
   await dismissModal(session)
 
-  // Poll for Apps_Title to appear (up to 12s)
-  const ready = await session.pollTrue(`!!document.getElementById('Apps_Title')`, 12000)
-  if (!ready) {
-    // Give it one more chance — maybe id is wrong, check for any content
-    await sleep(2000)
-  }
+  // Poll for card images (CSS modules hash class names, so use img count)
+  // Apps catalog has 7 apps (6 with cardImage + 1 internal) => >=3 imgs = rendered
+  const ready = await session.pollTrue(`document.querySelectorAll('img[src]').length >= 3`, 12000)
+  if (!ready) await sleep(3000) // last chance
 
-  const info = await session.evaluateJSON(`
-    const appTitle = document.getElementById('Apps_Title');
-    const tiles = document.querySelectorAll('[class*="appTile"]');
-    const imgs = document.querySelectorAll('img[src]');
-    const bg = window.getComputedStyle(document.body).backgroundColor;
-    return {
-      appTitleText: appTitle ? appTitle.textContent.trim() : null,
-      tilesCount: tiles.length,
-      imgsCount: imgs.length,
-      bg,
-      url: location.href,
-    };
-  `)
+  // Simple direct evaluate calls (avoid evaluateJSON which can fail on first load)
+  const bg = await session.evaluate(`window.getComputedStyle(document.body).backgroundColor`)
+  const imgsCount = await session.evaluate(`document.querySelectorAll('img[src]').length`)
+  const h1Text = await session.evaluate(`document.querySelector('h1') ? document.querySelector('h1').textContent.trim() : ''`)
+  const url = await session.evaluate(`location.href`)
 
   const shot = await session.screenshot('/tmp/mcw-apps-main.png')
-  console.log('  URL:', info?.url)
-  console.log('  bg:', info?.bg)
-  console.log('  Заголовок:', info?.appTitleText)
-  console.log('  Плиток:', info?.tilesCount, '| Картинок:', info?.imgsCount)
+  console.log('  URL:', url)
+  console.log('  bg:', bg)
+  console.log('  H1:', h1Text)
+  console.log('  Картинок (карточки апп):', imgsCount)
   console.log('  Скриншот:', shot)
 
-  const isWhite = !info || info.bg === 'rgb(255, 255, 255)' || info.bg === 'rgba(0, 0, 0, 0)'
-  const hasContent = info && (info.tilesCount > 0 || info.appTitleText)
+  const isWhite = !bg || bg === 'rgb(255, 255, 255)' || bg === 'rgba(0, 0, 0, 0)'
+  const hasContent = imgsCount >= 3
   const status = !hasContent
     ? '❌ НЕТ КОНТЕНТА (apps не отрендерился)'
     : isWhite
@@ -251,9 +241,9 @@ async function checkAppsMain(session) {
     id: 'apps-main',
     url: BASE_URL + '/#/apps',
     status,
-    bg: info?.bg,
+    bg,
     shot,
-    appTitleText: info?.appTitleText,
+    h1: h1Text,
   }
 }
 

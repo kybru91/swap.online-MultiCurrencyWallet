@@ -265,14 +265,18 @@ export const createWalletAppsBridge = ({
           return null
         }
         // Forward all other methods (eth_call, eth_getBalance, eth_sendTransaction, etc.)
-        // to the external EIP-1193 provider (e.g. MetaMask/window.ethereum)
-        const externalProvider = getEip1193Provider()
+        // to the external EIP-1193 provider ONLY if it is actually connected through MCW's
+        // metamask helper. This prevents a confused-deputy attack where eth_accounts returns
+        // internalWallet.address but signing is done by a different window.ethereum account.
+        const externalProvider = getConnectedWeb3Provider()
         if (externalProvider) {
           return externalProvider.request({ method, params })
         }
+        // MetaMask is not connected via MCW. We cannot sign on behalf of internalWallet
+        // here (no key access in the bridge). Ask the user to connect MetaMask first.
         throw {
           code: 4200,
-          message: `Method ${method} not supported by internal wallet provider`,
+          message: `Method ${method} requires an external wallet connection. Please connect MetaMask in MCW to proceed.`,
         }
       },
     }

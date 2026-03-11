@@ -1,4 +1,4 @@
-import { DAPPS_CATALOG, getDAppById, DAppEntry } from '../../shared/dappsCatalog'
+import { DAPPS_CATALOG, getDAppById } from '../../shared/dappsCatalog'
 
 describe('Shared DApps Catalog', () => {
   it('contains at least 6 entries', () => {

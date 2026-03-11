@@ -100,10 +100,6 @@ const Apps = (props: AppsProps) => {
     history.push(localisedUrl(locale, `${links.apps}/${id}`))
   }
 
-  const handleOpenCatalog = () => {
-    history.push(localisedUrl(locale, links.apps))
-  }
-
   const handleAppFrameLoad = () => {
     if (bridgeRef.current) {
       bridgeRef.current.sendReady()

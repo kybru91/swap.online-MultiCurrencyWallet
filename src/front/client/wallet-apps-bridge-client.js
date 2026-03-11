@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   var BRIDGE_SOURCE_HOST = 'swap.wallet.apps.bridge.host'
   var BRIDGE_SOURCE_CLIENT = 'swap.wallet.apps.bridge.client'
   var BRIDGE_HELLO = 'WALLET_APPS_BRIDGE_HELLO'
@@ -84,7 +84,7 @@
         return
       }
 
-      var requestId = 'wab-' + Date.now() + '-' + (++requestCounter)
+      var requestId = 'wab-' + Date.now() + '-' + ++requestCounter
 
       pending[requestId] = {
         resolve: resolve,

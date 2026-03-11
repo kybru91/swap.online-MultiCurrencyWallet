@@ -391,7 +391,10 @@ function CreateWallet(props) {
               <FormattedMessage id="BTCMS_SaveMnemonicButton" defaultMessage="Save secret phrase" />
             </Button>
           </div>
-        ) : forcedCurrencyData || hash === '#pin' || userWallets.length > 0 || useFullFlow ? (
+        ) : forcedCurrencyData ||
+          hash === '#pin' ||
+          localStorage.getItem(constants.localStorage.isWalletCreate) ||
+          useFullFlow ? (
           <StepsWrapper
             step={step}
             forcedCurrencyData={forcedCurrencyData}

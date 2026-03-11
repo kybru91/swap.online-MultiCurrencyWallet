@@ -7,10 +7,10 @@ describe('Wallet Apps Catalog', () => {
 
   it('allows only configured external hosts in allowlist', () => {
     expect(isAllowedWalletAppUrl('https://appsource.github.io/dex/')).toBe(true)
-    expect(isAllowedWalletAppUrl('https://polyfactory.wpmix.net/')).toBe(true)
+    expect(isAllowedWalletAppUrl('https://appsource.github.io/polyfactory/')).toBe(true)
     expect(isAllowedWalletAppUrl('https://appsource.github.io/farm/')).toBe(true)
-    expect(isAllowedWalletAppUrl('https://launchpad.onout.org/')).toBe(true)
-    expect(isAllowedWalletAppUrl('https://lottery.onout.org/')).toBe(true)
+    expect(isAllowedWalletAppUrl('https://appsource.github.io/launchpad/')).toBe(true)
+    expect(isAllowedWalletAppUrl('https://appsource.github.io/lottery/')).toBe(true)
     expect(isAllowedWalletAppUrl('https://evil.example.com/')).toBe(false)
   })
 
@@ -18,7 +18,7 @@ describe('Wallet Apps Catalog', () => {
     const app = getWalletAppById('polyfactory')
     expect(app).toBeDefined()
     expect(app!.walletBridge).toBe('eip1193')
-    expect(app!.routeUrl).toContain('polyfactory.wpmix.net')
+    expect(app!.routeUrl).toContain('appsource.github.io/polyfactory')
     expect(app!.routeUrl).toContain('walletBridge=swaponline')
   })
 
@@ -34,7 +34,7 @@ describe('Wallet Apps Catalog', () => {
     const app = getWalletAppById('ido-launchpad')
     expect(app).toBeDefined()
     expect(app!.walletBridge).toBe('eip1193')
-    expect(app!.routeUrl).toContain('launchpad.onout.org')
+    expect(app!.routeUrl).toContain('appsource.github.io/launchpad')
     expect(app!.routeUrl).toContain('walletBridge=swaponline')
   })
 
@@ -42,7 +42,7 @@ describe('Wallet Apps Catalog', () => {
     const app = getWalletAppById('crypto-lottery')
     expect(app).toBeDefined()
     expect(app!.walletBridge).toBe('eip1193')
-    expect(app!.routeUrl).toContain('lottery.onout.org')
+    expect(app!.routeUrl).toContain('appsource.github.io/lottery')
     expect(app!.routeUrl).toContain('walletBridge=swaponline')
   })
 })

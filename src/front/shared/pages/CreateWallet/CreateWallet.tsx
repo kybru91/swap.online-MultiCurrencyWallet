@@ -22,6 +22,7 @@ import { constants, localStorage } from 'helpers'
 import CloseIcon from 'components/ui/CloseIcon/CloseIcon'
 import web3Icons from 'images'
 import StepsWrapper from './Steps/StepsWrapper'
+import { defaultPack, widgetPack } from './Steps/startPacks'
 import styles from './CreateWallet.scss'
 
 const noInternalWallet = !!(config?.opts?.ui?.disableInternalWallet)
@@ -81,6 +82,7 @@ function CreateWallet(props) {
   const [step, setStep] = useState(1)
   const [error, setError] = useState('Choose something')
   const [isExist, setExist] = useState(false)
+  const [useFullFlow, setUseFullFlow] = useState(false)
 
   const goHome = () => {
     history.push(localisedUrl(locale, links.home))
@@ -111,6 +113,39 @@ function CreateWallet(props) {
 
   const handleRestoreShamirs = () => {
     actions.modals.open(constants.modals.ShamirsSecretRestory)
+  }
+
+  const handleSimpleCreate = () => {
+    const isWidgetBuild = !!(config && config.isWidget)
+    let pack = [...(isWidgetBuild ? widgetPack : defaultPack)]
+
+    // Respect createWalletCoinsOrder config if set (same logic as StepsWrapper)
+    if (config.opts.createWalletCoinsOrder && config.opts.createWalletCoinsOrder.length) {
+      const orderMap: Record<string, number> = {}
+      config.opts.createWalletCoinsOrder.forEach((coin: string, i: number) => {
+        orderMap[coin.toUpperCase()] = i
+      })
+      pack.sort((a, b) => {
+        const aOrder = orderMap[a.name.toUpperCase()] ?? pack.length
+        const bOrder = orderMap[b.name.toUpperCase()] ?? pack.length
+        return aOrder - bOrder
+      })
+    }
+
+    // Auto-add first two native coins (no baseCurrency) — typically BTC + ETH
+    const autoCoins = pack.filter(({ baseCurrency }) => !baseCurrency).slice(0, 2)
+
+    if (autoCoins.length === 0) {
+      // No native coins available — fall back to full currency selection
+      setUseFullFlow(true)
+      return
+    }
+
+    autoCoins.forEach(({ name }) => {
+      actions.core.markCoinAsVisible(name.toUpperCase(), true)
+    })
+    localStorage.setItem(constants.localStorage.isWalletCreate, true)
+    goHome()
   }
 
   const validate = () => {
@@ -353,7 +388,8 @@ function CreateWallet(props) {
                 </Button>
               </div>
             )
-            : (
+            : forcedCurrencyData || hash === '#pin' || userWallets.length > 0 || useFullFlow
+            ? (
               <StepsWrapper
                 step={step}
                 forcedCurrencyData={forcedCurrencyData}
@@ -364,6 +400,16 @@ function CreateWallet(props) {
                 currenciesForSecondStep={currencies}
                 showPinContent={hash === '#pin'}
               />
+            )
+            : (
+              <div style={{ display: 'flex', justifyContent: 'center', width: '60%', margin: 'auto' }}>
+                <Button blue fullWidth onClick={handleSimpleCreate}>
+                  <FormattedMessage
+                    id="createWalletButton1"
+                    defaultMessage="Continue"
+                  />
+                </Button>
+              </div>
             )
         }
       </div>

@@ -22,38 +22,43 @@ import config from 'helpers/externalConfig'
 // ---------------------------------------------------------------------------
 
 function buildChains(): AppKitNetwork[] {
-  return Object.values(config.evmNetworks).map((n: EvmNetworkConfig): AppKitNetwork => ({
-    id: n.networkVersion,
-    name: n.chainName,
-    caipNetworkId: `eip155:${n.networkVersion}`,
-    chainNamespace: 'eip155',
-    nativeCurrency: {
-      name: n.currency,
-      symbol: n.currency,
-      decimals: 18,
-    },
-    rpcUrls: {
-      default: { http: n.rpcUrls },
-    },
-    blockExplorers: n.blockExplorerUrls?.length
-      ? { default: { name: n.chainName, url: n.blockExplorerUrls[0] } }
-      : undefined,
-  }))
+  return Object.values(config.evmNetworks).map(
+    (n: EvmNetworkConfig): AppKitNetwork => ({
+      id: n.networkVersion,
+      name: n.chainName,
+      caipNetworkId: `eip155:${n.networkVersion}`,
+      chainNamespace: 'eip155',
+      nativeCurrency: {
+        name: n.currency,
+        symbol: n.currency,
+        decimals: 18,
+      },
+      rpcUrls: {
+        default: { http: n.rpcUrls },
+      },
+      blockExplorers: n.blockExplorerUrls?.length
+        ? { default: { name: n.chainName, url: n.blockExplorerUrls[0] } }
+        : undefined,
+    })
+  )
 }
 
 const chains = buildChains()
 
 // Fallback to ETH mainnet if config has no networks at initialisation time
-const networksForAdapter = chains.length > 0
-  ? (chains as [AppKitNetwork, ...AppKitNetwork[]])
-  : ([{
-      id: 1,
-      name: 'Ethereum',
-      caipNetworkId: 'eip155:1',
-      chainNamespace: 'eip155',
-      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-      rpcUrls: { default: { http: ['https://cloudflare-eth.com'] } },
-    }] as [AppKitNetwork, ...AppKitNetwork[]])
+const networksForAdapter =
+  chains.length > 0
+    ? (chains as [AppKitNetwork, ...AppKitNetwork[]])
+    : ([
+        {
+          id: 1,
+          name: 'Ethereum',
+          caipNetworkId: 'eip155:1',
+          chainNamespace: 'eip155',
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: { default: { http: ['https://cloudflare-eth.com'] } },
+        },
+      ] as [AppKitNetwork, ...AppKitNetwork[]])
 
 const projectId: string = config.api?.WalletConnectProjectId || 'a23677c4af3139b4eccb52981f76ad94'
 
@@ -107,6 +112,7 @@ export const modal = createAppKit({
     email: false,
     socials: false,
   },
+  allowUnsupportedChain: true,
 })
 
 // Sync AppKit theme when MCW user switches light/dark

@@ -1,4 +1,9 @@
-import { defaultWalletAppId, getWalletAppById, isAllowedWalletAppUrl, walletAppsCatalog } from 'pages/Apps/appsCatalog'
+import {
+  defaultWalletAppId,
+  getWalletAppById,
+  isAllowedWalletAppUrl,
+  walletAppsCatalog,
+} from 'pages/Apps/appsCatalog'
 import { DAPPS_CATALOG } from '../../shared/dappsCatalog'
 
 describe('Wallet Apps Catalog', () => {

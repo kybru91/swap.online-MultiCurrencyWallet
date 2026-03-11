@@ -570,7 +570,9 @@ describe('WalletAppsBridge Host (createWalletAppsBridge)', () => {
         TEST_ORIGIN
       )
 
-      await new Promise((r) => { setTimeout(r, 200) })
+      await new Promise((r) => {
+        setTimeout(r, 200)
+      })
 
       const readyMsg = nullMessages.find(
         (m) =>

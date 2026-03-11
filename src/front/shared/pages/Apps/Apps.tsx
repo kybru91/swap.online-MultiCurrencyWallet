@@ -35,13 +35,9 @@ const Apps = (props: AppsProps) => {
 
   const {
     history,
-    intl: {
-      locale,
-    },
+    intl: { locale },
     match: {
-      params: {
-        appId: routeAppId,
-      },
+      params: { appId: routeAppId },
     },
     ethData,
   } = props
@@ -141,10 +137,7 @@ const Apps = (props: AppsProps) => {
       <section styleName="appsPage">
         <header styleName="header">
           <h1 styleName="title">
-            <FormattedMessage
-              id="Apps_Title"
-              defaultMessage="Wallet Apps"
-            />
+            <FormattedMessage id="Apps_Title" defaultMessage="Wallet Apps" />
           </h1>
           <p styleName="description">
             <FormattedMessage
@@ -174,10 +167,7 @@ const Apps = (props: AppsProps) => {
               <div styleName="appTileTitle">{app.title}</div>
               {app.isInternal && (
                 <span styleName="appLabel">
-                  <FormattedMessage
-                    id="Apps_Internal"
-                    defaultMessage="Internal"
-                  />
+                  <FormattedMessage id="Apps_Internal" defaultMessage="Internal" />
                 </span>
               )}
             </button>

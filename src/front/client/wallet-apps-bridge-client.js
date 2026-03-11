@@ -147,6 +147,26 @@
     },
   }
 
+  // EIP-6963: announce bridge provider so wagmi v2 / AppKit discover it
+  var eip6963ProviderInfo = Object.freeze({
+    uuid: 'mcw-bridge-' + Date.now(),
+    name: 'MCW Wallet',
+    icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIj48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHJ4PSI2IiBmaWxsPSIjNjE0NGU1Ii8+PHRleHQgeD0iNTAlIiB5PSI1NSUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCI+TVc8L3RleHQ+PC9zdmc+',
+    rdns: 'io.swaponline.wallet',
+  })
+
+  var announceEip6963 = function () {
+    if (typeof CustomEvent === 'undefined') return
+    window.dispatchEvent(
+      new CustomEvent('eip6963:announceProvider', {
+        detail: Object.freeze({
+          info: eip6963ProviderInfo,
+          provider: provider,
+        }),
+      })
+    )
+  }
+
   var injectProvider = function () {
     var forceBridge = window.location.search.indexOf('walletBridge=swaponline') >= 0
 
@@ -170,6 +190,10 @@
     }
 
     window.dispatchEvent(new Event('ethereum#initialized'))
+
+    // EIP-6963: announce and listen for discovery requests
+    announceEip6963()
+    window.addEventListener('eip6963:requestProvider', announceEip6963)
   }
 
   var handleHostMessage = function (event) {

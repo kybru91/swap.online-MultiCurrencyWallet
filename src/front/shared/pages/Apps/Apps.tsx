@@ -94,7 +94,7 @@ const Apps = (props: AppsProps) => {
         bridgeRef.current = null
       }
     }
-  }, [needsBridge, appUrl, isAllowedAppUrl])
+  }, [needsBridge, appUrl, isAllowedAppUrl, ethData])
 
   const handleOpenApp = (id: string) => {
     history.push(localisedUrl(locale, `${links.apps}/${id}`))

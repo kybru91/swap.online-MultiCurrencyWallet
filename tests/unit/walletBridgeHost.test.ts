@@ -539,6 +539,66 @@ describe('WalletAppsBridge Host (createWalletAppsBridge)', () => {
     })
   })
 
+  describe('Null internalWallet (ethData not yet loaded)', () => {
+    let nullBridge: WalletBridge
+    let nullIframe: HTMLIFrameElement
+    let nullMessages: PostedMessage[]
+    let nullContentWindow: MessageEventSource
+
+    beforeEach(() => {
+      const mock = createMockIframe()
+      nullIframe = mock.iframe
+      nullMessages = mock.postedMessages
+      nullContentWindow = nullIframe.contentWindow as unknown as MessageEventSource
+
+      nullBridge = createWalletAppsBridge({
+        iframe: nullIframe,
+        appUrl: TEST_APP_URL,
+        internalWallet: null,
+      })
+    })
+
+    afterEach(() => {
+      nullBridge.destroy()
+    })
+
+    it('returns providerAvailable false when no internalWallet and no external provider', async () => {
+      sendClientMessage(
+        'WALLET_APPS_BRIDGE_HELLO',
+        { version: '1.0.0', ua: 'test' },
+        nullContentWindow,
+        TEST_ORIGIN
+      )
+
+      await new Promise((r) => { setTimeout(r, 200) })
+
+      const readyMsg = nullMessages.find(
+        (m) =>
+          (m.data as Record<string, unknown>)?.source === BRIDGE_SOURCE_HOST &&
+          (m.data as Record<string, unknown>)?.type === 'WALLET_APPS_BRIDGE_READY'
+      )
+
+      expect(readyMsg).toBeDefined()
+      const payload = (readyMsg!.data as Record<string, unknown>).payload as Record<string, unknown>
+      expect(payload.providerAvailable).toBe(false)
+      expect(payload.accounts).toEqual([])
+    })
+
+    it('returns error 4900 for eth_accounts when no wallet available', async () => {
+      const requestId = 'req-no-wallet'
+      sendClientMessage(
+        'WALLET_APPS_BRIDGE_REQUEST',
+        { requestId, method: 'eth_accounts', params: [] },
+        nullContentWindow,
+        TEST_ORIGIN
+      )
+
+      const response = (await waitForResponse(nullMessages, requestId)) as Record<string, unknown>
+      expect(response.error).toBeDefined()
+      expect((response.error as Record<string, unknown>).code).toBe(4900)
+    })
+  })
+
   describe('Cleanup', () => {
     it('destroy removes message listener', () => {
       bridge!.destroy()

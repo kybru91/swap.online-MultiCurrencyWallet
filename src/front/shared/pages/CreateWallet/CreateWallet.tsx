@@ -57,7 +57,7 @@ function CreateWallet(props) {
 
       const isExist = hiddenList.find((el) => {
         if (el.includes(':')) {
-          const [elCoin, elAddress] = el.split(':')
+          const [elCoin] = el.split(':')
           return elCoin === forcedCurrency.toUpperCase()
         }
         return el === forcedCurrency.toUpperCase()

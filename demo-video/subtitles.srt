@@ -1,0 +1,35 @@
+1
+00:00:02,000 --> 00:00:05,000
+MCW Wallet — Open Source Crypto Wallet
+
+2
+00:00:05,500 --> 00:00:09,000
+Create a new wallet with a 12-word seed phrase
+
+3
+00:00:10,000 --> 00:00:16,000
+Import an existing wallet with your seed phrase
+
+4
+00:00:18,000 --> 00:00:22,000
+Wallet created — keys derived from BIP39 mnemonic
+
+5
+00:00:25,000 --> 00:00:32,000
+Wallet Dashboard — BTC and ETH balances at a glance
+
+6
+00:00:42,000 --> 00:00:46,000
+Transaction History — track all your crypto movements
+
+7
+00:00:47,000 --> 00:00:54,000
+DApp Browser — access DeFi apps with built-in Web3 bridge
+
+8
+00:00:56,000 --> 00:01:03,000
+Settings — Network selection and Custom RPC configuration
+
+9
+00:01:04,000 --> 00:01:10,000
+Get the source code at onout.org/wallet

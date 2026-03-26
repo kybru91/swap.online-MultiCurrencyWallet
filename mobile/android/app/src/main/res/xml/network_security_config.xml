@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network security config for React Native development.
+  Allows cleartext (HTTP) connections to Metro bundler on 10.0.2.2 (emulator → host).
+  This file is referenced in AndroidManifest.xml via android:networkSecurityConfig.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Metro bundler host: 10.0.2.2 = localhost from Android emulator -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- Physical device via USB/WiFi: usually 10.0.2.2 forwarded by adb -->
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

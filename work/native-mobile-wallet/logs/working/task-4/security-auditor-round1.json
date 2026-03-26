@@ -1,0 +1,107 @@
+{
+  "status": "changes_required",
+  "reviewer": "security-auditor-4",
+  "round": 1,
+  "timestamp": "2026-03-05T00:00:00Z",
+  "scope": "Task 4: BiometricAuth + auto-lock (spec review + partial implementation review)",
+  "files_reviewed": [
+    "android/core/auth/src/main/java/com/mcw/core/auth/AuthManager.kt",
+    "android/core/auth/src/main/java/com/mcw/core/auth/LockState.kt",
+    "android/core/auth/src/main/java/com/mcw/core/auth/AuthResult.kt",
+    "android/core/auth/src/main/java/com/mcw/core/auth/BiometricChecker.kt",
+    "android/core/auth/src/main/java/com/mcw/core/auth/PasswordHasher.kt",
+    "android/core/auth/src/main/java/com/mcw/core/auth/TimeProvider.kt",
+    "android/core/auth/build.gradle.kts",
+    "android/core/storage/src/main/java/com/mcw/core/storage/SecureStorage.kt",
+    "work/native-mobile-wallet/tech-spec.md (Section: core:auth, Decision 12)",
+    "work/native-mobile-wallet/tasks/4.md"
+  ],
+  "summary": {
+    "totalFindings": 8,
+    "critical": 2,
+    "major": 4,
+    "minor": 2
+  },
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "A07: Auth Failures",
+      "title": "Lockout bypass via system clock manipulation",
+      "description": "The spec mandates storing lockout_until as an epoch millisecond timestamp in SecureStorage (task 4.md: 'set lockout_until = now + 60000'). The TimeProvider abstraction (TimeProvider.kt) correctly abstracts the clock, but the lockout enforcement logic will compare System.currentTimeMillis() (or TimeProvider output) against the stored timestamp. On Android, the system clock can be changed by a user with sufficient privileges, or on a rooted device. If an attacker (or the user themselves) sets the device clock backward, the lockout_until timestamp will appear to be in the past, and the lockout will be cleared immediately — bypassing the exponential backoff entirely. The tech-spec explicitly acknowledges 'No root detection in MVP' as an accepted risk, but clock manipulation is also possible on non-rooted devices via the Android Settings > Date & Time > Set time manually option (no root required). The spec's edge case 'System time changed during lockout -> validate lockout_until against current time, clear if in past' (task 4.md) directly enables this bypass by design: setting the clock forward past untilTimestamp also clears the lockout, but more critically, setting it backward makes lockout_until always appear in the future and never clears — HOWEVER, setting the clock to any point before the lockout was set makes it appear the lockout never happened.",
+      "location": "work/native-mobile-wallet/tasks/4.md:143 (Edge cases: System time changed during lockout)",
+      "impact": "An attacker with physical access to an unlocked Android device can set the system clock backward in Settings, then use unlimited password guesses to brute-force the wallet password with no lockout delay. With bcrypt cost 12, guessing is slow (~300ms per attempt on a modern device), but removing the lockout entirely eliminates the exponential backoff protection. A 6-8 character alphanumeric password has a modest search space that becomes tractable without rate limiting.",
+      "recommendation": "In addition to storing lockout_until timestamp, also store lockout_set_at timestamp. On each unlock attempt, verify: (1) if currentTime < lockout_until → still locked; (2) if currentTime < lockout_set_at → clock was set backward → treat as still locked (do NOT clear the lockout). Only clear the lockout if currentTime >= lockout_until AND currentTime >= lockout_set_at. This makes backward clock manipulation ineffective. Example:\n\n```kotlin\nval lockoutUntil = storage.getLong(KEY_LOCKOUT_UNTIL, 0L)\nval lockoutSetAt = storage.getLong(KEY_LOCKOUT_SET_AT, 0L)\nval now = timeProvider.currentTimeMillis()\nif (now < lockoutSetAt) {\n    // Clock moved backward — maintain lockout\n    return AuthResult.LockedOut(lockoutUntil)\n}\nif (now < lockoutUntil) {\n    return AuthResult.LockedOut(lockoutUntil)\n}\n// Lockout expired — proceed\n```",
+      "cwe": "CWE-613 (Insufficient Session Expiration) / CWE-367 (TOCTOU Race Condition)"
+    },
+    {
+      "severity": "critical",
+      "category": "A07: Auth Failures",
+      "title": "Failure counter not persisted atomically — race condition enables lockout bypass",
+      "description": "The spec stores the password failure counter in SecureStorage as 'password_failure_count' (Int) and increments it on each wrong password. SecureStorage uses SharedPreferences.edit().putString().apply() — the apply() call is asynchronous (queued to disk). If the user submits a wrong password multiple times in rapid succession (e.g., using automated scripting through a rooted ADB session or by rapidly tapping the button), the counter reads might all return 0 (the unwritten previous value) before any of the writes complete, leading to the counter never advancing past 1. This means the lockout threshold of 5 failures may never be reached. Additionally, the read-increment-write sequence (read count → increment → write count) is not atomic: read count=4 → app crashes or is killed → write never completes → on restart counter shows 3 → attacker gets extra attempts.",
+      "location": "work/native-mobile-wallet/tasks/4.md:102-105 (Password lockout storage)",
+      "impact": "On a device where the attacker can rapidly submit password guesses (e.g., via accessibility services or ADB on a rooted device), the non-atomic counter update could allow more than 5 failed attempts before lockout triggers. On any device, an app crash between read and write loses a failure count — allowing an attacker to attempt 4 failures, force-kill the app, attempt 4 more, etc., indefinitely.",
+      "recommendation": "Use SharedPreferences.edit().putInt().commit() (synchronous) instead of apply() for the failure counter and lockout timestamp writes. This ensures the value is flushed to disk before the function returns. Additionally, perform the read-increment-write in a single commit() call to make it as close to atomic as possible:\n\n```kotlin\n// Use commit() for critical security state, not apply()\nprefs.edit()\n    .putInt(KEY_FAILURE_COUNT, newCount)\n    .putLong(KEY_LOCKOUT_UNTIL, lockoutUntil)\n    .putLong(KEY_LOCKOUT_SET_AT, now)\n    .commit() // synchronous — blocks until flushed\n```\nNote: commit() on the main thread is acceptable here because it only writes a few integers. For the lockout timestamp specifically, the write MUST be synchronous to prevent the crash-between-read-write bypass.",
+      "cwe": "CWE-362 (Race Condition) / CWE-696 (Incorrect Behavior Order)"
+    },
+    {
+      "severity": "major",
+      "category": "A07: Auth Failures",
+      "title": "Biometric downgrade attack: BiometricPrompt with BIOMETRIC_STRONG does not prevent weak biometric bypass",
+      "description": "The tech-spec and task 4.md specify using BiometricManager.canAuthenticate(BIOMETRIC_STRONG) to check availability. However, the BiometricPrompt.PromptInfo shown in task 4.md does NOT set setAllowedAuthenticators(BIOMETRIC_STRONG) — it only sets setNegativeButtonText('Use password'). Without setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG), the BiometricPrompt will accept BIOMETRIC_WEAK authenticators (e.g., some face recognition implementations that are less secure). On Android 11+, setAllowedAuthenticators() is the correct way to enforce strong biometrics. The combination of checking BIOMETRIC_STRONG availability but not enforcing it in the prompt allows a downgrade: the device could have a strong biometric enrolled (satisfying the check) but then use a weak biometric modality for actual authentication.",
+      "location": "work/native-mobile-wallet/tasks/4.md:76-98 (BiometricPrompt setup code example)",
+      "impact": "A malicious actor could potentially authenticate using a weaker biometric modality (e.g., 2D face recognition on older devices) that is easier to spoof, even when the device has a strong biometric enrolled. This reduces the effective security of biometric authentication for wallet operations.",
+      "recommendation": "Set setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG) on the PromptInfo builder:\n\n```kotlin\nval promptInfo = BiometricPrompt.PromptInfo.Builder()\n    .setTitle(\"Authenticate\")\n    .setSubtitle(\"Unlock your wallet\")\n    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)\n    .setNegativeButtonText(\"Use password\")\n    .build()\n```\nAlso ensure the BiometricManager availability check uses the same authenticator type: BiometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG).",
+      "cwe": "CWE-287 (Improper Authentication)"
+    },
+    {
+      "severity": "major",
+      "category": "A07: Auth Failures",
+      "title": "Biometric prompt cancellation counted as failure — user can be locked out by accident",
+      "description": "The task 4.md spec states: 'Biometric prompt cancelled by user → treat as failure'. The BiometricPrompt has two callback methods: onAuthenticationFailed() (called when biometric is presented but does not match) and onAuthenticationError() (called for system-level errors including user cancellation, ERROR_USER_CANCELED = 10, ERROR_NEGATIVE_BUTTON = 13). The spec's statement conflates these two events. onAuthenticationFailed() is the legitimate failure count for 'presented wrong finger/face'. onAuthenticationError() with ERROR_USER_CANCELED should NOT be treated as a biometric failure because: (1) the 3-failure fallback threshold would be triggered immediately by 3 taps of 'Use password', and (2) this could cause accidental lockout if the user repeatedly cancels the biometric prompt to choose password instead. The distinction between 'wrong biometric' and 'cancelled prompt' is security-critical.",
+      "location": "work/native-mobile-wallet/tasks/4.md:141 (Edge cases: Biometric prompt cancelled by user)",
+      "impact": "A user who taps 'Use password' button 3 times (which triggers ERROR_NEGATIVE_BUTTON in onAuthenticationError) would be forced to the password prompt as intended — but if the implementation counts this toward the biometric failure count and resets it incorrectly, or if onAuthenticationError is incorrectly mapped to failure, edge cases arise. More critically: if the implementation increments a biometric failure counter on ANY non-success biometric event and links this to the password lockout counter, a user could trigger password lockout through biometric cancellations alone.",
+      "recommendation": "Implement separate handling for biometric authentication outcomes:\n\n```kotlin\nobject : BiometricPrompt.AuthenticationCallback() {\n    override fun onAuthenticationFailed() {\n        // Wrong biometric presented — increment biometric failure count only\n        biometricFailureCount++\n        if (biometricFailureCount >= 3) showPasswordPrompt()\n    }\n    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {\n        when (errorCode) {\n            BiometricPrompt.ERROR_NEGATIVE_BUTTON,\n            BiometricPrompt.ERROR_USER_CANCELED -> {\n                // User chose to cancel or use password — show password prompt\n                // Do NOT increment failure counter\n                showPasswordPrompt()\n            }\n            BiometricPrompt.ERROR_LOCKOUT,\n            BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> {\n                // System-level biometric lockout — fall back to password immediately\n                showPasswordPrompt()\n            }\n            else -> {\n                // Hardware error — show error message, allow retry\n            }\n        }\n    }\n}\n```\nNote: BiometricPrompt.ERROR_LOCKOUT (7) and ERROR_LOCKOUT_PERMANENT (9) from the system should also trigger fallback to password, not count as incremental failures.",
+      "cwe": "CWE-287 (Improper Authentication) / CWE-754 (Improper Check for Unusual Conditions)"
+    },
+    {
+      "severity": "major",
+      "category": "A09: Security Logging and Monitoring",
+      "title": "No security event logging specified for authentication failures and lockout events",
+      "description": "The tech-spec specifies 'Transaction lifecycle logging' and 'WebView bridge error logging' for Crashlytics, but the ':core:auth' module has no requirement to log security-relevant events: failed authentication attempts, lockout triggers, lockout expiry, biometric fallback events, and auto-lock events. Without security event logging, there is no audit trail to detect brute-force attacks in progress, anomalous authentication patterns, or issues with the authentication flow in production. The tech-spec's secret logging policy (lines 23-25) correctly prohibits logging passwords/keys but does NOT specify what auth events SHOULD be logged.",
+      "location": "work/native-mobile-wallet/tech-spec.md:24 (Secret logging policy — auth events not mentioned)",
+      "impact": "No visibility into authentication failures in production. Brute-force attempts, lockout bypass attempts, and authentication flow bugs will be invisible in Crashlytics. This makes it impossible to detect if users are experiencing authentication issues or if the lockout mechanism is functioning correctly.",
+      "recommendation": "Add structured Crashlytics custom logging for authentication events. Log event type and outcome, never credential values:\n\n```kotlin\n// Log to Crashlytics (import com.google.firebase.crashlytics.FirebaseCrashlytics)\nFirebaseCrashlytics.getInstance().log(\"AUTH: password_attempt result=failure remaining=$remaining\")\nFirebaseCrashlytics.getInstance().log(\"AUTH: lockout_triggered duration=${durationSeconds}s level=$lockoutLevel\")\nFirebaseCrashlytics.getInstance().log(\"AUTH: biometric_fallback reason=3_failures\")\nFirebaseCrashlytics.getInstance().log(\"AUTH: auto_lock reason=inactivity\")\nFirebaseCrashlytics.getInstance().log(\"AUTH: auto_lock reason=background duration=${bgSeconds}s\")\n```\nNever log: the password attempt string, password hash, failure count values that reveal proximity to lockout threshold, or timestamps that would help an attacker time attacks.",
+      "cwe": "CWE-778 (Insufficient Logging)"
+    },
+    {
+      "severity": "major",
+      "category": "A04: Insecure Design",
+      "title": "Auto-lock background timer relies on onPause/onResume — bypassed by configuration changes and multi-window",
+      "description": "The spec states: 'Background timer: start in onPause(), check duration in onResume()'. On Android, onPause() is called not only when the app goes to background but also during configuration changes (screen rotation), multi-window resizing, and when an Activity dialog (including BiometricPrompt itself) is shown. If the auto-lock background timer starts in onPause() due to a screen rotation, it will have been running for however long the rotation takes (~100-500ms), and onResume() is called before the 30-second threshold. However, a more serious issue: if the user switches to split-screen mode, onPause() is called for the wallet app even though it is still visible. The 30-second background timer would fire and lock the wallet while the user is actively viewing it. Conversely, using ProcessLifecycleOwner (which only triggers when ALL activities are hidden) instead of Activity lifecycle would be more appropriate for the background detection.",
+      "location": "work/native-mobile-wallet/tasks/4.md:117-119 (Auto-lock timers section)",
+      "impact": "Either false positives (auto-lock fires while user is actively using the app in split-screen), or the timer is implemented incorrectly and the background lock protection is bypassed. Specifically, if the developer works around the rotation issue by ignoring short onPause durations, they may also inadvertently ignore the legitimate 30-second background case.",
+      "recommendation": "Use ProcessLifecycleOwner for background detection instead of Activity lifecycle callbacks. ProcessLifecycleOwner's ON_STOP event fires only when the app is truly backgrounded (all activities hidden), not on configuration changes or split-screen:\n\n```kotlin\nclass AuthManager @Inject constructor(...) : DefaultLifecycleObserver {\n    init {\n        // Register with process lifecycle, not activity lifecycle\n        ProcessLifecycleOwner.get().lifecycle.addObserver(this)\n    }\n    override fun onStop(owner: LifecycleOwner) {\n        backgroundTimestamp = timeProvider.currentTimeMillis()\n    }\n    override fun onStart(owner: LifecycleOwner) {\n        val elapsed = timeProvider.currentTimeMillis() - backgroundTimestamp\n        if (elapsed > BACKGROUND_LOCK_THRESHOLD_MS) lock()\n        backgroundTimestamp = 0L\n    }\n}\n```\nThis correctly handles rotation (onStop is not called), split-screen (onStop IS called when wallet is in background position), and multi-window scenarios.",
+      "cwe": "CWE-613 (Insufficient Session Expiration)"
+    },
+    {
+      "severity": "minor",
+      "category": "A02: Cryptographic Failures",
+      "title": "BCryptPasswordHasher does not enforce minimum password length before verification",
+      "description": "The PasswordHasher interface defines checkPassword(plaintext: String, bcryptHash: String) with no length validation. The BCryptPasswordHasher implementation calls BCrypt.checkpw() directly. The AuthResult.PasswordTooShort sealed class exists but is only returned as a result — the enforcement must be in the AuthManager. The jBCrypt BCrypt.checkpw() function with an empty string input still runs a full bcrypt comparison against the stored hash, consuming ~300ms of CPU on a modern device. While this does not constitute a vulnerability per se, if the caller (future AuthManager implementation) calls checkPassword() before validating length, the empty-string timing behavior could be exploited for timing-based inference in edge cases. More importantly, the spec allows 8+ character passwords (tech-spec.md overrides user-spec's 6-char minimum), but PasswordHasher has no enforcement — it relies entirely on the AuthManager to reject short passwords via PasswordTooShort.",
+      "location": "android/core/auth/src/main/java/com/mcw/core/auth/PasswordHasher.kt:20-22",
+      "impact": "If the AuthManager implementation is written without length validation before calling checkPassword(), short passwords (including empty string) will be compared against the stored hash via bcrypt. This wastes CPU (denial of service via rapid short-password submissions) and may allow a user to set a password shorter than the minimum if the hash is stored without validation.",
+      "recommendation": "Add a length guard in AuthManager before calling checkPassword(), and document the expectation:\n\n```kotlin\nfun authenticateWithPassword(password: String): AuthResult {\n    if (password.length < MIN_PASSWORD_LENGTH) return AuthResult.PasswordTooShort\n    val hash = storage.getPasswordHash() ?: return AuthResult.NoPasswordSet\n    // ... check lockout ...\n    return if (passwordHasher.checkPassword(password, hash)) {\n        AuthResult.Success\n    } else {\n        // increment counter\n        AuthResult.WrongPassword(remaining)\n    }\n}\n```",
+      "cwe": "CWE-521 (Weak Password Requirements)"
+    },
+    {
+      "severity": "minor",
+      "category": "A04: Insecure Design",
+      "title": "LockState.LockedOut timestamp exposed to UI — potential information disclosure for timing attacks",
+      "description": "The LockState.LockedOut(val untilTimestamp: Long) data class exposes the exact epoch millisecond when the lockout expires to any observer of the lockStateFlow. While the UI legitimately needs this to display a countdown timer, exposing the raw epoch timestamp (rather than remaining seconds) to observers could allow a sophisticated attacker monitoring the StateFlow (e.g., via a malicious accessibility service or a process reading the app's memory on a rooted device) to correlate the lockout timestamp with the stored KEY_LOCKOUT_UNTIL value in SecureStorage, confirming that the lockout mechanism is active and calculating exactly when to retry. This is a minor issue since the same information is available from SecureStorage directly on a rooted device, but defense-in-depth recommends exposing only the remaining duration rather than the absolute timestamp.",
+      "location": "android/core/auth/src/main/java/com/mcw/core/auth/LockState.kt:13",
+      "impact": "Minor information disclosure. An attacker monitoring the UI state can determine exact lockout expiry, enabling precise timing of next attack attempt. Not exploitable on non-rooted devices.",
+      "recommendation": "Consider whether to expose remaining duration (Long milliseconds remaining) instead of absolute timestamp in the LockState: data class LockedOut(val remainingMs: Long). The AuthManager can compute remainingMs = lockoutUntil - timeProvider.currentTimeMillis() before emitting to the StateFlow. This limits the information exposed while still enabling the countdown timer in the UI. The current design is acceptable for MVP if changing the sealed class is considered disruptive.",
+      "cwe": "CWE-200 (Exposure of Sensitive Information)"
+    }
+  ]
+}
